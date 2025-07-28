@@ -18,6 +18,68 @@ locals {
     created_by  = "terraform"
   }
   tags = merge(local.default_tags, var.tags)
+
+  # Deployment type configuration matrix
+  # This matrix defines the specific settings for each AVD deployment pattern
+  deployment_config = {
+    pooled_desktop = {
+      host_pool_type                = "Pooled"
+      app_group_type               = "Desktop"
+      load_balancer_type           = var.load_balancer_type
+      max_sessions                 = var.max_session_limit
+      start_vm_on_connect         = false
+      friendly_name_suffix        = "Desktop Pool"
+      description_suffix          = "Pooled Desktop Environment"
+      personal_assignment_type    = null
+      supports_load_balancing     = true
+      supports_applications       = false
+    }
+    personal_desktop = {
+      host_pool_type              = "Personal"
+      app_group_type             = "Desktop"
+      load_balancer_type         = null
+      max_sessions               = 1
+      start_vm_on_connect       = true
+      friendly_name_suffix      = "Personal Desktop"
+      description_suffix        = "Personal Desktop Environment"
+      personal_assignment_type  = var.personal_desktop_assignment_type
+      supports_load_balancing   = false
+      supports_applications     = false
+    }
+    pooled_remoteapp = {
+      host_pool_type              = "Pooled"
+      app_group_type             = "RemoteApp"
+      load_balancer_type         = var.load_balancer_type
+      max_sessions               = var.max_session_limit
+      start_vm_on_connect       = false
+      friendly_name_suffix      = "RemoteApp Pool"
+      description_suffix        = "Pooled RemoteApp Environment"
+      personal_assignment_type  = null
+      supports_load_balancing   = true
+      supports_applications     = true
+    }
+    personal_remoteapp = {
+      host_pool_type              = "Personal"
+      app_group_type             = "RemoteApp"
+      load_balancer_type         = null
+      max_sessions               = 1
+      start_vm_on_connect       = true
+      friendly_name_suffix      = "Personal RemoteApp"
+      description_suffix        = "Personal RemoteApp Environment"
+      personal_assignment_type  = var.personal_desktop_assignment_type
+      supports_load_balancing   = false
+      supports_applications     = true
+    }
+  }
+  
+  # Current deployment configuration based on selected deployment type
+  current_config = local.deployment_config[var.deployment_type]
+  
+  # Validation for RemoteApp deployments
+  validate_remoteapp_apps = var.deployment_type == "pooled_remoteapp" || var.deployment_type == "personal_remoteapp" ? (
+    length(var.published_applications) > 0 ? true : 
+    error("published_applications must contain at least one application for RemoteApp deployments")
+  ) : true
 }
 
 /*
@@ -82,13 +144,14 @@ resource "azurerm_virtual_desktop_host_pool" "avd" {
   name                = format("hp-%s-%s", var.prefix, var.environment)
   location            = azurerm_resource_group.avd.location
   resource_group_name = azurerm_resource_group.avd.name
-  type                = "Pooled"
-  friendly_name       = "${var.prefix}-${var.environment}-hostpool"
-  description         = "Host pool created via Terraform"
-  maximum_sessions_allowed = var.max_session_limit
-  load_balancer_type  = "BreadthFirst"
+  type                = local.current_config.host_pool_type
+  friendly_name       = "${var.prefix}-${var.environment}-${local.current_config.friendly_name_suffix}"
+  description         = "${local.current_config.description_suffix} created via Terraform"
+  maximum_sessions_allowed = local.current_config.max_sessions
+  load_balancer_type  = local.current_config.load_balancer_type
   validate_environment = true
-  start_vm_on_connect = false
+  start_vm_on_connect = local.current_config.start_vm_on_connect
+  personal_desktop_assignment_type = local.current_config.personal_assignment_type
   custom_rdp_properties = "targetisaadjoined:i:1;drivestoredirect:s:*;audiomode:i:0;videoplaybackmode:i:1;redirectclipboard:i:1;redirectprinters:i:1;devicestoredirect:s:*;redirectcomports:i:1;redirectsmartcards:i:1;usbdevicestoredirect:s:*;enablecredsspsupport:i:1;redirectwebauthn:i:1;use multimon:i:1;enablerdsaadauth:i:1;"
   tags                = local.tags
 
@@ -133,9 +196,9 @@ resource "azurerm_virtual_desktop_application_group" "avd" {
   location            = azurerm_resource_group.avd.location
   resource_group_name = azurerm_resource_group.avd.name
   host_pool_id        = azurerm_virtual_desktop_host_pool.avd.id
-  type                = "Desktop"
-  friendly_name       = "${var.prefix}-${var.environment}-appgroup"
-  description         = "Default Desktop Application Group"
+  type                = local.current_config.app_group_type
+  friendly_name       = "${var.prefix}-${var.environment}-${local.current_config.friendly_name_suffix}"
+  description         = "${local.current_config.description_suffix} Application Group"
   tags                = local.tags
 }
 
@@ -150,15 +213,38 @@ resource "azurerm_virtual_desktop_workspace" "avd" {
   location            = azurerm_resource_group.avd.location
   resource_group_name = azurerm_resource_group.avd.name
   friendly_name       = "${var.prefix}-${var.environment}-workspace"
-  description         = "Workspace for ${var.environment} environment"
+  description         = "${local.current_config.description_suffix} workspace for ${var.environment} environment"
   public_network_access_enabled = true
   tags                = local.tags
 }
 
 /*
+ * RemoteApp Applications
+ *
+ * Publishes specific applications for RemoteApp deployments. Each application
+ * represents an executable that users can launch remotely. Only created when
+ * deployment type includes RemoteApp functionality.
+ */
+resource "azurerm_virtual_desktop_application" "apps" {
+  for_each = local.current_config.supports_applications ? {
+    for app in var.published_applications : app.name => app
+  } : {}
+  
+  name                         = each.value.name
+  application_group_id         = azurerm_virtual_desktop_application_group.avd.id
+  friendly_name               = each.value.display_name
+  description                 = each.value.description
+  path                        = each.value.path
+  command_line_arguments      = each.value.command_line_arguments != "" ? each.value.command_line_arguments : null
+  command_line_argument_policy = each.value.command_line_setting
+  show_in_portal              = each.value.show_in_portal
+  icon_path                   = each.value.icon_path != "" ? each.value.icon_path : null
+}
+
+/*
  * Associate the application group with the workspace.  This creates the
- * relationship between the workspace and the Desktop application group so
- * that users can see the desktops in their feed.
+ * relationship between the application group and workspace so that users 
+ * can see the published resources (desktops or applications) in their feed.
  */
 resource "azurerm_virtual_desktop_workspace_application_group_association" "avd" {
   workspace_id         = azurerm_virtual_desktop_workspace.avd.id

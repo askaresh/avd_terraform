@@ -1,15 +1,21 @@
-# Azure Virtual Desktop Terraform configuration
+# Azure Virtual Desktop Terraform Configuration (Modular)
 
-This directory contains a Terraform configuration that **re-implements** the
-provided ARM template for Azure Virtual Desktop (AVD) as code using the
-`azurerm` provider.  The goal of this configuration is to make it easy to
-deploy repeatable AVD environments (development, test and production) by
-parameterising resource names and sizes, following Azure naming conventions and
-best practices.
+This directory contains a **modular Terraform configuration** that deploys Azure Virtual Desktop (AVD) environments supporting **multiple deployment patterns**. The configuration supports pooled desktops, personal desktops, and RemoteApp deployments in both shared and dedicated models.
+
+## Supported Deployment Types
+
+This configuration supports **four distinct AVD deployment patterns**:
+
+| Deployment Type | Description | Use Cases | Resource Sharing |
+|-----------------|-------------|-----------|------------------|
+| **`pooled_desktop`** | Traditional shared desktop environment | Call centers, task workers, training labs | Multiple users per VM |
+| **`personal_desktop`** | Dedicated 1:1 desktop assignments | Developers, power users, persistent workloads | One user per VM |
+| **`pooled_remoteapp`** | Shared published applications | Line-of-business apps, legacy applications | Multiple users per VM |
+| **`personal_remoteapp`** | Dedicated application access | Sensitive apps, compliance requirements | One user per VM |
 
 ## Architecture
 
-This Terraform configuration deploys a complete Azure Virtual Desktop environment with the following components:
+This Terraform configuration deploys a complete Azure Virtual Desktop environment with **dynamic configuration** based on the selected deployment type:
 
 ```mermaid
 graph TB
@@ -106,11 +112,25 @@ graph TB
 |-----------|---------|---------------|
 | **Resource Group** | Container for all AVD resources | `rg-{prefix}-{environment}` |
 | **Virtual Network** | Isolated network for session hosts | Configurable CIDR (default: 192.168.0.0/24) |
-| **Host Pool** | Manages session host capacity and load balancing | Pooled type with BreadthFirst balancing |
-| **Application Group** | Defines published desktop resources | Desktop type for full desktop access |
+| **Host Pool** | Manages session host capacity and load balancing | **Dynamic**: Pooled or Personal based on deployment type |
+| **Application Group** | Defines published resources | **Dynamic**: Desktop or RemoteApp based on deployment type |
 | **Workspace** | User-facing portal aggregating app groups | Single workspace per environment |
-| **Session Hosts** | Windows 11 VMs running user sessions | Scalable count, Windows 11 + Microsoft 365, Modern PowerShell registration |
+| **Session Hosts** | Windows 11 VMs running user sessions | **Dynamic**: Shared or dedicated based on deployment type |
+| **Published Applications** | Specific apps for RemoteApp deployments | **Conditional**: Only created for RemoteApp types |
 | **RBAC Assignments** | Security access control | Desktop Virtualization User + VM User Login roles |
+
+## Deployment Type Configuration Matrix
+
+The configuration automatically adjusts based on the `deployment_type` variable:
+
+| Setting | pooled_desktop | personal_desktop | pooled_remoteapp | personal_remoteapp |
+|---------|----------------|------------------|------------------|--------------------|
+| **Host Pool Type** | Pooled | Personal | Pooled | Personal |
+| **App Group Type** | Desktop | Desktop | RemoteApp | RemoteApp |
+| **Load Balancer** | BreadthFirst/DepthFirst | N/A | BreadthFirst/DepthFirst | N/A |
+| **Max Sessions** | User-defined | 1 (automatic) | User-defined | 1 (automatic) |
+| **Start VM on Connect** | false | true | false | true |
+| **Requires Apps** | No | No | Yes | Yes |
 
 ### Data Flow
 
@@ -246,25 +266,88 @@ guidance.
 
 ## Deploying
 
-1. **Clone** or copy the `avd_terraform` directory into a working directory.
-2. **Set up Azure authentication** by creating a `set-auth.ps1` file with your Azure service principal credentials:
-   ```powershell
-   $env:ARM_CLIENT_ID = "your-client-id"
-   $env:ARM_CLIENT_SECRET = "your-client-secret" 
-   $env:ARM_TENANT_ID = "your-tenant-id"
-   $env:ARM_SUBSCRIPTION_ID = "your-subscription-id"
-   ```
-   Run this script before executing any Terraform commands: `.\set-auth.ps1`
-3. Create a variable file (`dev.auto.tfvars`, `prod.auto.tfvars`, etc.) and override
-   at least the following variables:
-   * `environment` – set to `dev`, `test`, `prod` or any other environment identifier.
-   * `security_principal_object_ids` – list of Azure AD object IDs that should have access to the desktop.
-   * `admin_password` – specify a strong password for the local administrator on the session host VMs.
-   * `vnet_address_space` and `subnet_address_prefix` – adjust to suit your network plan.
-4. Run `terraform init` to install required providers.
-5. Run `terraform plan` to review the execution plan.  Use `-var-file=dev.auto.tfvars` if your variables file is named differently.
-6. Run `terraform apply` to provision the environment.
-7. After apply completes, sign in to the [Azure Virtual Desktop](https://learn.microsoft.com/en-us/azure/virtual-desktop/) service in the Azure portal to verify that the host pool, application group, workspace and session hosts are present.
+### Quick Start
+
+1. **Clone** the repository and navigate to the project directory
+2. **Set up Azure authentication** using Azure CLI or service principal
+3. **Choose your deployment type** by selecting the appropriate `.tfvars` file or creating a custom one
+4. **Deploy** using Terraform
+
+### Deployment Type Examples
+
+The repository includes pre-configured examples for each deployment pattern:
+
+#### Pooled Desktop (Traditional AVD)
+```bash
+# Deploy shared desktop environment for multiple users
+terraform init
+terraform plan -var-file=dev-pooled-desktop.auto.tfvars
+terraform apply -var-file=dev-pooled-desktop.auto.tfvars
+```
+
+#### Personal Desktop (Dedicated VMs)
+```bash
+# Deploy dedicated desktop per user
+terraform init
+terraform plan -var-file=dev-personal-desktop.auto.tfvars
+terraform apply -var-file=dev-personal-desktop.auto.tfvars
+```
+
+#### RemoteApp (Published Applications)
+```bash
+# Deploy published applications environment
+terraform init
+terraform plan -var-file=dev-pooled-remoteapp.auto.tfvars
+terraform apply -var-file=dev-pooled-remoteapp.auto.tfvars
+```
+
+#### Production RemoteApp (Dedicated App Access)
+```bash
+# Deploy dedicated application access for executives/compliance
+terraform init
+terraform plan -var-file=prod-personal-remoteapp.auto.tfvars
+terraform apply -var-file=prod-personal-remoteapp.auto.tfvars
+```
+
+### Custom Configuration
+
+Create your own `.tfvars` file with the required settings:
+
+```hcl
+# Custom deployment configuration
+deployment_type = "pooled_desktop"  # Choose deployment pattern
+environment     = "prod"
+prefix          = "company"
+
+# Network configuration
+vnet_address_space     = ["10.0.0.0/24"]
+subnet_address_prefix  = "10.0.0.0/24"
+
+# Deployment-specific settings
+session_host_count = 5
+max_session_limit  = 6
+load_balancer_type = "DepthFirst"  # For pooled types only
+
+# Security
+security_principal_object_ids = [
+  "user-or-group-object-id-1",
+  "user-or-group-object-id-2"
+]
+admin_password = "SecurePassword123!"
+
+# For RemoteApp deployments, define published applications
+published_applications = [
+  {
+    name                    = "excel"
+    display_name           = "Microsoft Excel"
+    description            = "Spreadsheet Application"
+    path                   = "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE"
+    command_line_arguments = ""
+    command_line_setting   = "Allow"
+    show_in_portal         = true
+  }
+]
+```
 
 ## Multiple environments (dev/test/prod)
 

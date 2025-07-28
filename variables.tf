@@ -95,3 +95,61 @@ variable "registration_token_expiration_hours" {
   type        = number
   default     = 2
 }
+
+variable "deployment_type" {
+  description = "AVD deployment type: pooled_desktop (traditional shared desktops), personal_desktop (dedicated 1:1 desktops), pooled_remoteapp (shared published applications), personal_remoteapp (dedicated published applications)"
+  type        = string
+  validation {
+    condition = contains([
+      "pooled_desktop",
+      "personal_desktop", 
+      "pooled_remoteapp",
+      "personal_remoteapp"
+    ], var.deployment_type)
+    error_message = "Must be one of: pooled_desktop, personal_desktop, pooled_remoteapp, personal_remoteapp"
+  }
+  default = "pooled_desktop"
+}
+
+variable "load_balancer_type" {
+  description = "Load balancing algorithm for pooled host pools. BreadthFirst distributes users across all hosts before filling any host. DepthFirst fills each host to capacity before moving to the next."
+  type        = string
+  validation {
+    condition     = contains(["BreadthFirst", "DepthFirst"], var.load_balancer_type)
+    error_message = "Must be BreadthFirst or DepthFirst"
+  }
+  default = "BreadthFirst"
+}
+
+variable "personal_desktop_assignment_type" {
+  description = "Assignment type for personal desktop host pools. Automatic assigns users to any available VM. Direct requires specific VM assignment."
+  type        = string
+  validation {
+    condition     = contains(["Automatic", "Direct"], var.personal_desktop_assignment_type)
+    error_message = "Must be Automatic or Direct"
+  }
+  default = "Automatic"
+}
+
+variable "published_applications" {
+  description = "List of applications to publish for RemoteApp deployments. Each application defines an executable that users can launch remotely."
+  type = list(object({
+    name                         = string
+    display_name                = string
+    description                 = optional(string, "")
+    path                        = string
+    command_line_arguments      = optional(string, "")
+    command_line_setting        = optional(string, "DoNotAllow")
+    show_in_portal             = optional(bool, true)
+    icon_path                  = optional(string, "")
+  }))
+  default = []
+  
+  validation {
+    condition = alltrue([
+      for app in var.published_applications : 
+      contains(["Allow", "DoNotAllow", "Require"], app.command_line_setting)
+    ])
+    error_message = "command_line_setting must be Allow, DoNotAllow, or Require for each application"
+  }
+}
