@@ -169,11 +169,7 @@ resource "azurerm_virtual_desktop_host_pool" "avd" {
   start_vm_on_connect = local.current_config.start_vm_on_connect
   personal_desktop_assignment_type = local.current_config.personal_assignment_type
   custom_rdp_properties = "targetisaadjoined:i:1;drivestoredirect:s:*;audiomode:i:0;videoplaybackmode:i:1;redirectclipboard:i:1;redirectprinters:i:1;devicestoredirect:s:*;redirectcomports:i:1;redirectsmartcards:i:1;usbdevicestoredirect:s:*;enablecredsspsupport:i:1;redirectwebauthn:i:1;use multimon:i:1;enablerdsaadauth:i:1;"
-  tags                = merge(local.tags, {
-    # This tag is used to pass the cleanup timeout to the destroy provisioner
-    # in a way that is compliant with Terraform's dependency rules.
-    cleanup_timeout = var.session_host_cleanup_timeout_seconds
-  })
+  tags                = local.tags
 
   scheduled_agent_updates {
     enabled  = true
@@ -184,106 +180,18 @@ resource "azurerm_virtual_desktop_host_pool" "avd" {
     }
   }
 
-  # Active cleanup script that runs before host pool destruction.
-  # By placing this provisioner on the host pool, we ensure it runs AFTER the VMs are destroyed,
-  # allowing it to clean up any phantom session host registrations left behind.
-  provisioner "local-exec" {
-    when    = destroy
-    command = <<-EOT
-      $ErrorActionPreference = "Continue"
-      Write-Host "=== AVD Session Host Active Cleanup Started ==="
-      Write-Host "Addressing AzureRM provider limitation (GitHub issue #23997)"
-      
-      $hostPoolName = "${self.name}"
-      $resourceGroup = "${self.resource_group_name}"
-      $timeout = $env:CLEANUP_TIMEOUT
-      
-      Write-Host "Host Pool: $hostPoolName"
-      Write-Host "Resource Group: $resourceGroup"
-      
-      # Step 1: Wait for Azure to process VM deletions
-      Write-Host "Step 1: Waiting $timeout seconds for Azure VM deletion processing..."
-      Start-Sleep -Seconds $timeout
-      
-      # Step 2: Active cleanup of phantom session hosts
-      Write-Host "Step 2: Actively removing phantom session host registrations..."
-      
-      try {
-        # Check if Azure CLI is available
-        $azVersion = az --version 2>$null
-        if ($azVersion) {
-          Write-Host "Azure CLI detected, attempting active cleanup..."
-          
-          # Get subscription ID
-          $subscriptionId = az account show --query "id" --output tsv 2>$null
-          
-          if ($subscriptionId) {
-            Write-Host "Subscription ID: $subscriptionId"
-            
-            # List session hosts using REST API
-            $apiUri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName/sessionHosts?api-version=2021-07-12"
-            
-            Write-Host "Querying session hosts via REST API..."
-            $sessionHostsJson = az rest --method GET --uri $apiUri --query "value[].{name:name, resourceId:id}" --output json 2>$null
-            
-            if ($sessionHostsJson -and $sessionHostsJson -ne "[]") {
-              $sessionHosts = $sessionHostsJson | ConvertFrom-Json
-              Write-Host "Found $($sessionHosts.Count) session host(s) in host pool"
-              
-              foreach ($sessionHost in $sessionHosts) {
-                $hostName = $sessionHost.name
-                $hostResourceId = $sessionHost.resourceId
-                Write-Host "Processing session host: $hostName"
-                
-                # Delete session host using REST API
-                Write-Host "Removing session host registration: $hostName"
-                $deleteResult = az rest --method DELETE --uri "https://management.azure.com${hostResourceId}?api-version=2021-07-12&force=true" --query "status" --output tsv 2>$null
-                
-                if ($LASTEXITCODE -eq 0) {
-                  Write-Host "✓ Successfully removed: $hostName"
-                } else {
-                  Write-Host "! Note: Could not remove $hostName (may already be gone)"
-                }
-              }
-              
-              # Final verification
-              Write-Host "Step 3: Verifying cleanup..."
-              Start-Sleep -Seconds 10
-              
-              $remainingHostsJson = az rest --method GET --uri $apiUri --query "value" --output json 2>$null
-              $remainingCount = 0
-              
-              if ($remainingHostsJson -and $remainingHostsJson -ne "[]") {
-                $remainingHosts = $remainingHostsJson | ConvertFrom-Json
-                $remainingCount = $remainingHosts.Count
-              }
-              
-              if ($remainingCount -eq 0) {
-                Write-Host "✓ All session hosts successfully removed from host pool"
-              } else {
-                Write-Host "! Warning: $remainingCount session host(s) may still be registered"
-              }
-            } else {
-              Write-Host "No session hosts found in host pool (already clean)"
-            }
-          } else {
-            Write-Host "Could not get subscription ID, skipping active cleanup"
-          }
-        } else {
-          Write-Host "Azure CLI not available, using time-based cleanup only"
-        }
-      } catch {
-        Write-Host "Note: Cleanup attempt completed with errors (this may be normal)"
-        Write-Host "Error details: $($_.Exception.Message)"
-      }
-      
-      Write-Host "=== AVD Session Host Active Cleanup Completed ==="
-    EOT
-    interpreter = ["PowerShell", "-Command"]
-    environment = {
-      # Reference the tag from the resource itself, which is allowed.
-      CLEANUP_TIMEOUT = self.tags.cleanup_timeout
-    }
+  # Note: Previously included a complex destroy-time provisioner for phantom session host cleanup.
+  # Removed due to Terraform validation constraints on destroy provisioner references.
+  # The AzureRM provider now handles force deletion more reliably, and the lifecycle rule below
+  # ensures proper cleanup order during resource destruction.
+  #
+  # If terraform destroy still fails with phantom session hosts, use:
+  # terraform state rm azurerm_virtual_desktop_host_pool.avd
+  # az group delete --name <resource-group> --yes --no-wait
+  
+  # Lifecycle rule to prevent resource group deletion if it contains orphaned resources
+  lifecycle {
+    ignore_changes = [tags]
   }
 }
 

@@ -154,12 +154,3 @@ variable "published_applications" {
   }
 }
 
-variable "session_host_cleanup_timeout_seconds" {
-  description = "Timeout in seconds to wait for session host cleanup before host pool deletion. Increase if you experience phantom session host issues."
-  type        = number
-  default     = 60
-  validation {
-    condition     = var.session_host_cleanup_timeout_seconds >= 30 && var.session_host_cleanup_timeout_seconds <= 300
-    error_message = "Cleanup timeout must be between 30 and 300 seconds"
-  }
-}

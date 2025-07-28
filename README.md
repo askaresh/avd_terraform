@@ -248,6 +248,7 @@ Common registration issues and solutions:
 | **Network Connectivity** | DSC fails to download config | Check VM internet access and Azure service endpoints |
 | **Permission Issues** | Registration fails with auth errors | Verify VM system-assigned identity permissions |
 | **Agent Installation** | DSC reports agent install failure | Check VM has sufficient disk space and admin rights |
+| **Phantom Session Hosts** | `terraform destroy` fails with "SessionHostPool could not be deleted" | `terraform state rm azurerm_virtual_desktop_host_pool.avd` then `az group delete --name <rg-name> --yes` |
 
 ### Security Model
 

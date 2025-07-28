@@ -277,6 +277,28 @@ published_applications = [
 ]
 ```
 
+### Phantom Session Host Issues
+
+If `terraform destroy` fails with session host errors:
+
+```powershell
+# Error message:
+# "The SessionHostPool could not be deleted because it still has SessionHosts associated with it"
+
+# Solution 1: Remove host pool from state and force delete resource group
+terraform state rm azurerm_virtual_desktop_host_pool.avd
+az group delete --name rg-avd-dev --yes --no-wait
+
+# Solution 2: Wait and retry (Azure backend may catch up)
+Start-Sleep 120  # Wait 2 minutes
+terraform destroy -var-file=dev-personal-desktop.auto.tfvars
+
+# Solution 3: Force deletion with specific types
+az group delete --name rg-avd-dev --force-deletion-types Microsoft.Compute/virtualMachines,Microsoft.DesktopVirtualization/hostpools
+```
+
+**Note**: The phantom session host issue is a known Azure AVD backend problem where VM deletion doesn't always clean up session host registrations immediately.
+
 ## Cleanup
 
 ### Remove Specific Deployment
