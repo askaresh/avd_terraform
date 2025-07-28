@@ -164,8 +164,8 @@ resource "azurerm_virtual_desktop_host_pool" "avd" {
     }
   }
 
-  # Note: The time_sleep.session_host_cleanup resource will automatically
-  # handle the delay during destruction through its destroy_duration setting
+  # Note: The terraform_data.session_host_cleanup resource will actively
+  # remove phantom session host registrations before host pool deletion
 }
 
 /*
@@ -185,20 +185,115 @@ resource "azurerm_virtual_desktop_host_pool_registration_info" "avd" {
 }
 
 /*
- * Session Host Cleanup Time Delay
+ * Session Host Active Cleanup
  *
- * This time_sleep resource ensures Azure has time to process session host
- * de-registrations before attempting to delete the host pool.
+ * This addresses the known AzureRM provider limitation where session host
+ * registrations aren't automatically cleaned up when VMs are destroyed.
+ * Reference: https://github.com/hashicorp/terraform-provider-azurerm/issues/23997
  */
-resource "time_sleep" "session_host_cleanup" {
+resource "terraform_data" "session_host_cleanup" {
   count = var.session_host_count > 0 ? 1 : 0
+
+  input = {
+    host_pool_name  = azurerm_virtual_desktop_host_pool.avd.name
+    resource_group  = azurerm_resource_group.avd.name
+    cleanup_timeout = var.session_host_cleanup_timeout_seconds
+  }
+
+  # Active cleanup script that runs before host pool destruction
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      $ErrorActionPreference = "Continue"
+      Write-Host "=== AVD Session Host Active Cleanup Started ==="
+      Write-Host "Addressing AzureRM provider limitation (GitHub issue #23997)"
+      
+      $hostPoolName = "${self.input.host_pool_name}"
+      $resourceGroup = "${self.input.resource_group}"
+      $timeout = ${self.input.cleanup_timeout}
+      
+      Write-Host "Host Pool: $hostPoolName"
+      Write-Host "Resource Group: $resourceGroup"
+      
+      # Step 1: Wait for Azure to process VM deletions
+      Write-Host "Step 1: Waiting $timeout seconds for Azure VM deletion processing..."
+      Start-Sleep -Seconds $timeout
+      
+      # Step 2: Active cleanup of phantom session hosts
+      Write-Host "Step 2: Actively removing phantom session host registrations..."
+      
+      try {
+        # Check if Azure CLI is available
+        $azVersion = az --version 2>$null
+        if ($azVersion) {
+          Write-Host "Azure CLI detected, attempting active cleanup..."
+          
+          # List all session hosts in the host pool
+          $sessionHostsJson = az desktopvirtualization sessionhost list `
+            --host-pool-name $hostPoolName `
+            --resource-group $resourceGroup `
+            --query "[].{name:name, status:status}" `
+            --output json 2>$null
+          
+          if ($sessionHostsJson) {
+            $sessionHosts = $sessionHostsJson | ConvertFrom-Json
+            Write-Host "Found $($sessionHosts.Count) session host(s) in host pool"
+            
+            foreach ($sessionHost in $sessionHosts) {
+              $hostName = $sessionHost.name
+              $status = $sessionHost.status
+              Write-Host "Processing session host: $hostName (Status: $status)"
+              
+              # Force remove each session host
+              Write-Host "Removing session host registration: $hostName"
+              az desktopvirtualization sessionhost delete `
+                --host-pool-name $hostPoolName `
+                --resource-group $resourceGroup `
+                --name $hostName `
+                --force 2>$null
+              
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "✓ Successfully removed: $hostName"
+              } else {
+                Write-Host "! Note: Could not remove $hostName (may already be gone)"
+              }
+            }
+            
+            # Final verification
+            Write-Host "Step 3: Verifying cleanup..."
+            Start-Sleep -Seconds 10
+            
+            $remainingHosts = az desktopvirtualization sessionhost list `
+              --host-pool-name $hostPoolName `
+              --resource-group $resourceGroup `
+              --query "length(@)" `
+              --output tsv 2>$null
+            
+            if ($remainingHosts -eq "0" -or $remainingHosts -eq $null) {
+              Write-Host "✓ All session hosts successfully removed from host pool"
+            } else {
+              Write-Host "! Warning: $remainingHosts session host(s) may still be registered"
+            }
+          } else {
+            Write-Host "No session hosts found in host pool (already clean)"
+          }
+        } else {
+          Write-Host "Azure CLI not available, using time-based cleanup only"
+        }
+      } catch {
+        Write-Host "Note: Cleanup attempt completed with errors (this may be normal)"
+        Write-Host "Error details: $($_.Exception.Message)"
+      }
+      
+      Write-Host "=== AVD Session Host Active Cleanup Completed ==="
+    EOT
+    interpreter = ["PowerShell", "-Command"]
+  }
 
   depends_on = [
     azurerm_virtual_machine_extension.avd_dsc,
     azurerm_windows_virtual_machine.session_host
   ]
-
-  destroy_duration = "${var.session_host_cleanup_timeout_seconds}s"
 }
 
 /*

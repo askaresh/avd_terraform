@@ -9,10 +9,7 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.5"
     }
-    time = {
-      source  = "hashicorp/time"
-      version = "~> 0.12"
-    }
+    # terraform_data is built into Terraform 1.4+, no provider needed
   }
 }
 
