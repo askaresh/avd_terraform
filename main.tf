@@ -180,43 +180,9 @@ resource "azurerm_virtual_desktop_host_pool" "avd" {
     }
   }
 
-  # Note: The terraform_data.session_host_cleanup resource will actively
-  # remove phantom session host registrations before host pool deletion
-}
-
-/*
- * Host Pool Registration Token
- *
- * Creates a registration token for session hosts to join the host pool.
- * The token expires in configured hours from creation time.
- */
-resource "azurerm_virtual_desktop_host_pool_registration_info" "avd" {
-  hostpool_id     = azurerm_virtual_desktop_host_pool.avd.id
-  expiration_date = timeadd(timestamp(), "${var.registration_token_expiration_hours}h")
-
-  # Ensure registration info is destroyed BEFORE the host pool
-  lifecycle {
-    create_before_destroy = false
-  }
-}
-
-/*
- * Session Host Active Cleanup
- *
- * This addresses the known AzureRM provider limitation where session host
- * registrations aren't automatically cleaned up when VMs are destroyed.
- * Reference: https://github.com/hashicorp/terraform-provider-azurerm/issues/23997
- */
-resource "terraform_data" "session_host_cleanup" {
-  count = var.session_host_count > 0 ? 1 : 0
-
-  input = {
-    host_pool_name  = azurerm_virtual_desktop_host_pool.avd.name
-    resource_group  = azurerm_resource_group.avd.name
-    cleanup_timeout = var.session_host_cleanup_timeout_seconds
-  }
-
-  # Active cleanup script that runs before host pool destruction
+  # Active cleanup script that runs before host pool destruction.
+  # By placing this provisioner on the host pool, we ensure it runs AFTER the VMs are destroyed,
+  # allowing it to clean up any phantom session host registrations left behind.
   provisioner "local-exec" {
     when    = destroy
     command = <<-EOT
@@ -224,9 +190,9 @@ resource "terraform_data" "session_host_cleanup" {
       Write-Host "=== AVD Session Host Active Cleanup Started ==="
       Write-Host "Addressing AzureRM provider limitation (GitHub issue #23997)"
       
-      $hostPoolName = "${self.input.host_pool_name}"
-      $resourceGroup = "${self.input.resource_group}"
-      $timeout = ${self.input.cleanup_timeout}
+      $hostPoolName = "${self.name}"
+      $resourceGroup = "${self.resource_group_name}"
+      $timeout = ${var.session_host_cleanup_timeout_seconds}
       
       Write-Host "Host Pool: $hostPoolName"
       Write-Host "Resource Group: $resourceGroup"
@@ -311,27 +277,37 @@ resource "terraform_data" "session_host_cleanup" {
     EOT
     interpreter = ["PowerShell", "-Command"]
   }
+}
 
-  depends_on = [
-    azurerm_virtual_machine_extension.avd_dsc,
-    azurerm_windows_virtual_machine.session_host
-  ]
+/*
+ * Registration Info
+ *
+ * The registration info resource generates a token that allows session hosts to
+ * join the host pool. The expiration time is configurable to allow for shorter
+ * lived tokens in production.
+ */
+resource "azurerm_virtual_desktop_host_pool_registration_info" "avd" {
+  hostpool_id       = azurerm_virtual_desktop_host_pool.avd.id
+  expiration_date   = timeadd(timestamp(), "${var.registration_token_expiration_hours}h")
 }
 
 /*
  * Registration Token Local
- * Following Microsoft's recommended approach for cleaner token handling
+ *
+ * This local exposes the registration token for use in the DSC extension.
+ * Using a local avoids storing the token in the Terraform state file directly.
  */
 locals {
+  # This token is used by the DSC extension to register session hosts.
+  # It is retrieved from the registration_info resource.
   registration_token = azurerm_virtual_desktop_host_pool_registration_info.avd.token
 }
 
 /*
  * Application Group
  *
- * Desktop application group associated with the host pool.  Users
- * connecting to the host pool will do so via this application group.  The
- * naming is kept short to avoid exceeding Azure’s length restrictions.
+ * The application group defines the resources (desktops or applications) that
+ * users can access. The type is determined by the deployment configuration.
  */
 resource "azurerm_virtual_desktop_application_group" "avd" {
   name                = local.app_group_name
