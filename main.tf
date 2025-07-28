@@ -163,6 +163,12 @@ resource "azurerm_virtual_desktop_host_pool" "avd" {
       hour_of_day = 2
     }
   }
+
+  # Ensure session hosts are destroyed before host pool
+  depends_on = [
+    azurerm_virtual_machine_extension.avd_dsc,
+    azurerm_windows_virtual_machine.session_host
+  ]
 }
 
 /*
