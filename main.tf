@@ -164,22 +164,41 @@ resource "azurerm_virtual_desktop_host_pool" "avd" {
     }
   }
 
-  # Ensure session hosts are destroyed before host pool
-  depends_on = [
-    azurerm_virtual_machine_extension.avd_dsc,
-    azurerm_windows_virtual_machine.session_host
-  ]
+  # Note: The time_sleep.session_host_cleanup resource will automatically
+  # handle the delay during destruction through its destroy_duration setting
 }
 
 /*
  * Host Pool Registration Token
  *
  * Creates a registration token for session hosts to join the host pool.
- * The token expires in 2 hours from creation time.
+ * The token expires in configured hours from creation time.
  */
 resource "azurerm_virtual_desktop_host_pool_registration_info" "avd" {
   hostpool_id     = azurerm_virtual_desktop_host_pool.avd.id
   expiration_date = timeadd(timestamp(), "${var.registration_token_expiration_hours}h")
+
+  # Ensure registration info is destroyed BEFORE the host pool
+  lifecycle {
+    create_before_destroy = false
+  }
+}
+
+/*
+ * Session Host Cleanup Time Delay
+ *
+ * This time_sleep resource ensures Azure has time to process session host
+ * de-registrations before attempting to delete the host pool.
+ */
+resource "time_sleep" "session_host_cleanup" {
+  count = var.session_host_count > 0 ? 1 : 0
+
+  depends_on = [
+    azurerm_virtual_machine_extension.avd_dsc,
+    azurerm_windows_virtual_machine.session_host
+  ]
+
+  destroy_duration = "${var.session_host_cleanup_timeout_seconds}s"
 }
 
 /*
