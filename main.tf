@@ -169,7 +169,11 @@ resource "azurerm_virtual_desktop_host_pool" "avd" {
   start_vm_on_connect = local.current_config.start_vm_on_connect
   personal_desktop_assignment_type = local.current_config.personal_assignment_type
   custom_rdp_properties = "targetisaadjoined:i:1;drivestoredirect:s:*;audiomode:i:0;videoplaybackmode:i:1;redirectclipboard:i:1;redirectprinters:i:1;devicestoredirect:s:*;redirectcomports:i:1;redirectsmartcards:i:1;usbdevicestoredirect:s:*;enablecredsspsupport:i:1;redirectwebauthn:i:1;use multimon:i:1;enablerdsaadauth:i:1;"
-  tags                = local.tags
+  tags                = merge(local.tags, {
+    # This tag is used to pass the cleanup timeout to the destroy provisioner
+    # in a way that is compliant with Terraform's dependency rules.
+    cleanup_timeout = var.session_host_cleanup_timeout_seconds
+  })
 
   scheduled_agent_updates {
     enabled  = true
@@ -192,7 +196,7 @@ resource "azurerm_virtual_desktop_host_pool" "avd" {
       
       $hostPoolName = "${self.name}"
       $resourceGroup = "${self.resource_group_name}"
-      $timeout = ${var.session_host_cleanup_timeout_seconds}
+      $timeout = $env:CLEANUP_TIMEOUT
       
       Write-Host "Host Pool: $hostPoolName"
       Write-Host "Resource Group: $resourceGroup"
@@ -276,6 +280,10 @@ resource "azurerm_virtual_desktop_host_pool" "avd" {
       Write-Host "=== AVD Session Host Active Cleanup Completed ==="
     EOT
     interpreter = ["PowerShell", "-Command"]
+    environment = {
+      # Reference the tag from the resource itself, which is allowed.
+      CLEANUP_TIMEOUT = self.tags.cleanup_timeout
+    }
   }
 }
 
