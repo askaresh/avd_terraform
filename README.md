@@ -36,9 +36,9 @@ graph TB
                 NIC2["NIC 2<br/>nic-avd-{env}-02"]
                 NIC3["NIC N<br/>nic-avd-{env}-0N"]
                 
-                EXT1["VM Extensions:<br/>- AVD Agent (PowerShell Registration)<br/>- AAD Login<br/>- Guest Attestation"]
-                EXT2["VM Extensions:<br/>- AVD Agent (PowerShell Registration)<br/>- AAD Login<br/>- Guest Attestation"]
-                EXT3["VM Extensions:<br/>- AVD Agent (PowerShell Registration)<br/>- AAD Login<br/>- Guest Attestation"]
+                EXT1["VM Extensions:<br/>- AVD Agent (DSC Registration)<br/>- AAD Login<br/>- Guest Attestation"]
+                EXT2["VM Extensions:<br/>- AVD Agent (DSC Registration)<br/>- AAD Login<br/>- Guest Attestation"]
+                EXT3["VM Extensions:<br/>- AVD Agent (DSC Registration)<br/>- AAD Login<br/>- Guest Attestation"]
             end
         end
         
@@ -249,31 +249,50 @@ The original ARM template created a single session host and nested deployments f
 
 * Uses native Terraform resources to create the virtual network, subnet and NSG.  The NSG is intentionally empty to match the ARM template’s empty `securityRules` array.
 * Creates the host pool, application group and workspace with similar properties (pooled type, BreadthFirst load balancing and desktop preferred application group).
-* Generates registration information directly on the host pool and exposes the token via `azurerm_virtual_desktop_host_pool_registration_info.avd.token`.  In the ARM template the token is retrieved via `listRegistrationTokens`; in Terraform it is available as an attribute and used by the modern PowerShell CustomScriptExtension for reliable AVD agent installation and registration.
+* Generates registration information directly on the host pool and exposes the token via `azurerm_virtual_desktop_host_pool_registration_info.avd.token`.  In the ARM template the token is retrieved via `listRegistrationTokens`; in Terraform it is available as an attribute and used by the **Microsoft DSC extension** for reliable AVD agent installation and registration.
 * Leverages count to create multiple NICs, VMs and extensions when `session_host_count > 1`.  The ARM template deploys one VM; you can adjust `session_host_count` to any number your subscription quota allows.
-* Uses a **modern PowerShell-based approach** for session host registration instead of legacy DSC configuration, providing more reliable token passing and better error handling.
+* Uses **Microsoft's official DSC configuration** approach for session host registration, following the same proven method used in Microsoft's ARM templates and documentation.
 
 ### Session Host Registration Approach
 
-This configuration uses a modern **CustomScriptExtension** approach for registering session hosts with the host pool, which offers several advantages over traditional DSC methods:
+This configuration uses **Microsoft's official DSC (Desired State Configuration)** approach for registering session hosts with the host pool, following Microsoft's documented best practices:
 
-**Modern PowerShell Approach (Current Implementation):**
+**DSC-Based Approach (Current Implementation):**
 ```hcl
-resource "azurerm_virtual_machine_extension" "avd_agent" {
-  publisher = "Microsoft.Compute"
-  type      = "CustomScriptExtension"
-  settings = {
-    commandToExecute = "powershell.exe [...] Direct AVD agent installation [...] REGISTRATIONTOKEN=${token}"
+resource "azurerm_virtual_machine_extension" "avd_dsc" {
+  name                       = "Microsoft.Powershell.DSC"
+  publisher                  = "Microsoft.Powershell"
+  type                       = "DSC"
+  type_handler_version       = "2.73"
+  
+  settings = <<-SETTINGS
+    {
+      "modulesUrl": "${var.configuration_zip_file}",
+      "configurationFunction": "Configuration.ps1\\AddSessionHost",
+      "properties": {
+        "HostPoolName": "${azurerm_virtual_desktop_host_pool.avd.name}",
+        "aadJoin": true
+      }
+    }
+SETTINGS
+
+  protected_settings = <<PROTECTED_SETTINGS
+  {
+    "properties": {
+      "registrationInfoToken": "${local.registration_token}"
+    }
   }
+PROTECTED_SETTINGS
 }
 ```
 
-**Benefits:**
-- ✅ **Reliable token passing** - No DSC configuration file dependencies
-- ✅ **Better error handling** - Clear PowerShell error messages
-- ✅ **Modern approach** - Uses current Azure best practices
-- ✅ **Faster deployment** - Direct MSI installation without intermediate steps
-- ✅ **Production tested** - Proven reliable across multiple deployments
+**Benefits of DSC Approach:**
+- ✅ **Microsoft-supported method** - Official recommended approach
+- ✅ **Proven reliability** - Used in Microsoft's own templates and documentation
+- ✅ **Secure token handling** - Registration token passed via protected settings
+- ✅ **Automated configuration** - Handles full AVD agent installation and registration
+- ✅ **Azure AD join support** - Built-in support for domain-less environments
+- ✅ **Error resilience** - Robust retry mechanisms for network issues
 
 ## Testing the configuration
 
@@ -288,3 +307,16 @@ terraform destroy -var-file=dev.auto.tfvars
 ```
 
 You will be prompted to confirm the destruction.  Destroying the resources will remove the host pool, session hosts, network and resource group.
+
+## Key Variables
+
+| Variable | Purpose | Default | Notes |
+|----------|---------|---------|-------|
+| `environment` | Environment identifier (dev/test/prod) | `"dev"` | Appended to all resource names |
+| `session_host_count` | Number of session host VMs to deploy | `1` | Scales the entire VM infrastructure |
+| `security_principal_object_ids` | Azure AD object IDs for desktop access | `[]` | **Required**: Must be populated before deployment |
+| `admin_password` | Local admin password for session hosts | - | **Required**: Must meet Azure complexity requirements |
+| `registration_token_expiration_hours` | Hours until registration token expires | `2` | Longer for dev (8h), shorter for prod (1-2h) |
+| `configuration_zip_file` | URL to Microsoft's DSC configuration | Microsoft's official URL | Contains the AddSessionHost DSC configuration |
+| `vm_size` | Azure VM size for session hosts | `"Standard_D4ds_v4"` | Choose based on user workload requirements |
+| `max_session_limit` | Max concurrent sessions per host | `2` | Balance user experience vs. cost |
