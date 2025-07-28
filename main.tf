@@ -237,7 +237,7 @@ resource "azurerm_virtual_desktop_host_pool" "avd" {
                 
                 # Delete session host using REST API
                 Write-Host "Removing session host registration: $hostName"
-                $deleteResult = az rest --method DELETE --uri "https://management.azure.com$hostResourceId" --query "status" --output tsv 2>$null
+                $deleteResult = az rest --method DELETE --uri "https://management.azure.com${hostResourceId}?api-version=2021-07-12&force=true" --query "status" --output tsv 2>$null
                 
                 if ($LASTEXITCODE -eq 0) {
                   Write-Host "✓ Successfully removed: $hostName"
