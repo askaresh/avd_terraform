@@ -16,5 +16,9 @@ terraform {
 # optional capabilities without any additional configuration.  See the
 # provider documentation for more details.
 provider "azurerm" {
-  features {}
+  features {
+    resource_group {
+      prevent_deletion_if_contains_resources = false
+    }
+  }
 }
