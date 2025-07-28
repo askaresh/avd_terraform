@@ -228,54 +228,60 @@ resource "terraform_data" "session_host_cleanup" {
         if ($azVersion) {
           Write-Host "Azure CLI detected, attempting active cleanup..."
           
-          # List all session hosts in the host pool
-          $sessionHostsJson = az desktopvirtualization sessionhost list `
-            --host-pool-name $hostPoolName `
-            --resource-group $resourceGroup `
-            --query "[].{name:name, status:status}" `
-            --output json 2>$null
+          # Get subscription ID
+          $subscriptionId = az account show --query "id" --output tsv 2>$null
           
-          if ($sessionHostsJson) {
-            $sessionHosts = $sessionHostsJson | ConvertFrom-Json
-            Write-Host "Found $($sessionHosts.Count) session host(s) in host pool"
+          if ($subscriptionId) {
+            Write-Host "Subscription ID: $subscriptionId"
             
-            foreach ($sessionHost in $sessionHosts) {
-              $hostName = $sessionHost.name
-              $status = $sessionHost.status
-              Write-Host "Processing session host: $hostName (Status: $status)"
+            # List session hosts using REST API
+            $apiUri = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroup/providers/Microsoft.DesktopVirtualization/hostPools/$hostPoolName/sessionHosts?api-version=2021-07-12"
+            
+            Write-Host "Querying session hosts via REST API..."
+            $sessionHostsJson = az rest --method GET --uri $apiUri --query "value[].{name:name, resourceId:id}" --output json 2>$null
+            
+            if ($sessionHostsJson -and $sessionHostsJson -ne "[]") {
+              $sessionHosts = $sessionHostsJson | ConvertFrom-Json
+              Write-Host "Found $($sessionHosts.Count) session host(s) in host pool"
               
-              # Force remove each session host
-              Write-Host "Removing session host registration: $hostName"
-              az desktopvirtualization sessionhost delete `
-                --host-pool-name $hostPoolName `
-                --resource-group $resourceGroup `
-                --name $hostName `
-                --force 2>$null
-              
-              if ($LASTEXITCODE -eq 0) {
-                Write-Host "✓ Successfully removed: $hostName"
-              } else {
-                Write-Host "! Note: Could not remove $hostName (may already be gone)"
+              foreach ($sessionHost in $sessionHosts) {
+                $hostName = $sessionHost.name
+                $hostResourceId = $sessionHost.resourceId
+                Write-Host "Processing session host: $hostName"
+                
+                # Delete session host using REST API
+                Write-Host "Removing session host registration: $hostName"
+                $deleteResult = az rest --method DELETE --uri "https://management.azure.com$hostResourceId" --query "status" --output tsv 2>$null
+                
+                if ($LASTEXITCODE -eq 0) {
+                  Write-Host "✓ Successfully removed: $hostName"
+                } else {
+                  Write-Host "! Note: Could not remove $hostName (may already be gone)"
+                }
               }
-            }
-            
-            # Final verification
-            Write-Host "Step 3: Verifying cleanup..."
-            Start-Sleep -Seconds 10
-            
-            $remainingHosts = az desktopvirtualization sessionhost list `
-              --host-pool-name $hostPoolName `
-              --resource-group $resourceGroup `
-              --query "length(@)" `
-              --output tsv 2>$null
-            
-            if ($remainingHosts -eq "0" -or $remainingHosts -eq $null) {
-              Write-Host "✓ All session hosts successfully removed from host pool"
+              
+              # Final verification
+              Write-Host "Step 3: Verifying cleanup..."
+              Start-Sleep -Seconds 10
+              
+              $remainingHostsJson = az rest --method GET --uri $apiUri --query "value" --output json 2>$null
+              $remainingCount = 0
+              
+              if ($remainingHostsJson -and $remainingHostsJson -ne "[]") {
+                $remainingHosts = $remainingHostsJson | ConvertFrom-Json
+                $remainingCount = $remainingHosts.Count
+              }
+              
+              if ($remainingCount -eq 0) {
+                Write-Host "✓ All session hosts successfully removed from host pool"
+              } else {
+                Write-Host "! Warning: $remainingCount session host(s) may still be registered"
+              }
             } else {
-              Write-Host "! Warning: $remainingHosts session host(s) may still be registered"
+              Write-Host "No session hosts found in host pool (already clean)"
             }
           } else {
-            Write-Host "No session hosts found in host pool (already clean)"
+            Write-Host "Could not get subscription ID, skipping active cleanup"
           }
         } else {
           Write-Host "Azure CLI not available, using time-based cleanup only"
