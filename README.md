@@ -120,6 +120,97 @@ graph TB
 4. **Connection Establishment**: RDP connection established to assigned session host
 5. **Session Management**: Multiple users can share session hosts up to the configured session limit
 
+### Session Host Registration Flow
+
+The following sequence shows how session hosts automatically register with the host pool during deployment:
+
+```mermaid
+sequenceDiagram
+    participant TF as Terraform
+    participant HP as Host Pool
+    participant RT as Registration Token
+    participant VM as Session Host VM
+    participant DSC as DSC Extension
+    participant ZIP as Microsoft DSC Config
+    participant AVD as AVD Service
+    participant AGENT as AVD Agent
+
+    Note over TF,AVD: Initial Deployment Phase
+    TF->>HP: 1. Create Host Pool
+    TF->>RT: 2. Generate Registration Token
+    Note right of RT: Token expires in 1-8 hours<br/>depending on environment
+    RT-->>TF: 3. Return token value
+    
+    TF->>VM: 4. Deploy Session Host VM
+    Note right of VM: Windows 11 + M365<br/>System-assigned identity<br/>AAD join ready
+    
+    Note over TF,AGENT: Registration Phase
+    TF->>DSC: 5. Install DSC Extension
+    Note right of DSC: Microsoft.Powershell.DSC v2.73<br/>Protected settings contain token
+    
+    DSC->>ZIP: 6. Download Microsoft DSC Config
+    Note right of ZIP: Configuration_1.0.02790.438.zip<br/>Contains AddSessionHost function
+    
+    DSC->>DSC: 7. Execute AddSessionHost Configuration
+    Note right of DSC: Configures AVD agent installation<br/>Sets host pool registration parameters
+    
+    DSC->>AGENT: 8. Install AVD Agent MSI
+    Note right of AGENT: Downloads and installs:<br/>- Microsoft.RDInfra.RDAgent<br/>- Microsoft.RDInfra.RDAgentBootLoader
+    
+    AGENT->>AVD: 9. Register with AVD Service
+    Note right of AGENT: Uses registration token<br/>Provides host pool name<br/>VM identity information
+    
+    AVD->>AVD: 10. Validate Token & Add Host
+    Note right of AVD: Checks token validity<br/>Adds VM to host pool<br/>Creates session host record
+    
+    AVD-->>AGENT: 11. Registration Successful
+    AGENT-->>DSC: 12. Configuration Complete
+    DSC-->>VM: 13. Session Host Ready
+    
+    Note over VM,AVD: Ongoing Operations
+    AGENT->>AVD: Heartbeat & Status Updates
+    AVD->>AGENT: Session Assignment Commands
+```
+
+#### Registration Flow Details
+
+**Phase 1: Infrastructure Setup**
+1. **Host Pool Creation**: Terraform creates the AVD host pool resource
+2. **Token Generation**: Registration token created with configurable expiration (1-8 hours)
+3. **VM Deployment**: Session host VMs deployed with system-assigned managed identity
+
+**Phase 2: DSC Configuration**
+4. **DSC Extension Install**: Microsoft.Powershell.DSC extension installed on each VM
+5. **Configuration Download**: DSC downloads Microsoft's official configuration zip file
+6. **AddSessionHost Execution**: DSC runs the AddSessionHost PowerShell configuration function
+
+**Phase 3: AVD Agent Registration**
+7. **Agent Installation**: DSC installs the AVD agent MSI packages
+8. **Service Registration**: Agent contacts AVD service using the registration token
+9. **Host Pool Membership**: VM added to host pool as available session host
+
+**Phase 4: Verification**
+10. **Status Confirmation**: Session host appears in Azure portal under Host Pool → Session hosts
+11. **Health Monitoring**: Ongoing heartbeat and status reporting to AVD service
+
+#### Registration Token Security
+
+- **Automatic Expiration**: Tokens expire after deployment to limit security exposure
+- **Protected Settings**: Token passed via DSC protected settings (encrypted in Azure)
+- **Environment-Specific**: Dev environments use longer expiration (8h), Production uses shorter (1-2h)
+- **State Storage**: Token stored in Terraform state - use remote state with encryption for production
+
+#### Troubleshooting Registration
+
+Common registration issues and solutions:
+
+| Issue | Symptoms | Solution |
+|-------|----------|----------|
+| **Token Expired** | Session host shows "Unavailable" | Re-run `terraform apply` to generate fresh token |
+| **Network Connectivity** | DSC fails to download config | Check VM internet access and Azure service endpoints |
+| **Permission Issues** | Registration fails with auth errors | Verify VM system-assigned identity permissions |
+| **Agent Installation** | DSC reports agent install failure | Check VM has sufficient disk space and admin rights |
+
 ### Security Model
 
 - **Network Isolation**: Session hosts deployed in dedicated VNet/subnet
