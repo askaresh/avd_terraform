@@ -37,7 +37,7 @@ locals {
     personal_desktop = {
       host_pool_type              = "Personal"
       app_group_type             = "Desktop"
-      load_balancer_type         = null
+      load_balancer_type         = "Persistent"  # Personal desktops use Persistent (though not used)
       max_sessions               = 1
       start_vm_on_connect       = true
       friendly_name_suffix      = "Personal Desktop"
@@ -61,7 +61,7 @@ locals {
     personal_remoteapp = {
       host_pool_type              = "Personal"
       app_group_type             = "RemoteApp"
-      load_balancer_type         = null
+      load_balancer_type         = "Persistent"  # Personal RemoteApp uses Persistent (though not used)
       max_sessions               = 1
       start_vm_on_connect       = true
       friendly_name_suffix      = "Personal RemoteApp"
