@@ -2,23 +2,46 @@
 
 ## Overview
 
-This guide covers deploying **modular Azure Virtual Desktop environments** supporting four distinct deployment patterns:
+This guide covers deploying **modular Azure Virtual Desktop environments** supporting four distinct deployment patterns with **Microsoft-compliant naming conventions**:
 
-- **Pooled Desktop**: Traditional shared desktop environment
-- **Personal Desktop**: Dedicated 1:1 desktop assignments  
-- **Pooled RemoteApp**: Shared published applications
-- **Personal RemoteApp**: Dedicated application access
+- **Pooled Desktop**: Traditional shared desktop environment (`vdpool-*-desktop`)
+- **Personal Desktop**: Dedicated 1:1 desktop assignments (`vdpool-*-personal`)
+- **Pooled RemoteApp**: Shared published applications (`vdpool-*-apps`)
+- **Personal RemoteApp**: Dedicated application access (`vdpool-*-personalapps`)
+
+## Microsoft Cloud Adoption Framework Naming
+
+All resources follow [**Microsoft Cloud Adoption Framework**](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) naming standards:
+
+### Deployment-Specific Resource Names
+
+| Deployment Type | Host Pool Name | Application Group Name | Workspace Name |
+|-----------------|----------------|------------------------|----------------|
+| **Pooled Desktop** | `vdpool-avd-dev-desktop` | `vdag-avd-dev-desktop` | `vdws-avd-dev` |
+| **Personal Desktop** | `vdpool-avd-dev-personal` | `vdag-avd-dev-personal` | `vdws-avd-dev` |
+| **Pooled RemoteApp** | `vdpool-avd-dev-apps` | `vdag-avd-dev-apps` | `vdws-avd-dev` |
+| **Personal RemoteApp** | `vdpool-avd-dev-personalapps` | `vdag-avd-dev-personalapps` | `vdws-avd-dev` |
+
+### Network and Supporting Resources
+
+| Resource Type | Naming Pattern | Example |
+|---------------|----------------|---------|
+| **Virtual Network** | `vnet-{prefix}-{environment}` | `vnet-avd-dev` |
+| **Subnet** | `snet-{prefix}-{environment}` | `snet-avd-dev` |
+| **Network Security Group** | `nsg-{prefix}-{environment}` | `nsg-avd-dev` |
+| **Virtual Machines** | `vm-{prefix}-{environment}-{number}` | `vm-avd-dev-01` |
+| **Network Interfaces** | `nic-{prefix}-{environment}-{number}` | `nic-avd-dev-01` |
 
 ## Pre-configured Deployment Options
 
 ### Quick Deployment Matrix
 
-| Environment | Deployment Type | File | Use Case |
-|-------------|----------------|------|----------|
-| **Development** | Pooled Desktop | `dev-pooled-desktop.auto.tfvars` | Testing, training, call centers |
-| **Development** | Personal Desktop | `dev-personal-desktop.auto.tfvars` | Developer workstations |
-| **Development** | Pooled RemoteApp | `dev-pooled-remoteapp.auto.tfvars` | App testing, legacy apps |
-| **Production** | Personal RemoteApp | `prod-personal-remoteapp.auto.tfvars` | Executive/compliance apps |
+| Environment | Deployment Type | File | Use Case | Resulting Host Pool Name |
+|-------------|----------------|------|----------|--------------------------|
+| **Development** | Pooled Desktop | `dev-pooled-desktop.auto.tfvars` | Testing, training, call centers | `vdpool-avd-dev-desktop` |
+| **Development** | Personal Desktop | `dev-personal-desktop.auto.tfvars` | Developer workstations | `vdpool-avd-dev-personal` |
+| **Development** | Pooled RemoteApp | `dev-pooled-remoteapp.auto.tfvars` | App testing, legacy apps | `vdpool-avd-dev-apps` |
+| **Production** | Personal RemoteApp | `prod-personal-remoteapp.auto.tfvars` | Executive/compliance apps | `vdpool-avd-prod-personalapps` |
 
 ## Before You Deploy
 
@@ -147,25 +170,50 @@ terraform apply -var-file=prod-personal-remoteapp.auto.tfvars
 
 ### 1. Azure Portal Verification
 1. Navigate to **Azure Virtual Desktop → Host pools**
-2. Verify your host pool appears with correct type (Pooled/Personal)
-3. Check **Session hosts** tab for registered VMs
-4. Verify **Application groups** show correct type (Desktop/RemoteApp)
+2. Verify your host pool appears with **Microsoft-compliant naming**:
+   - Pooled Desktop: `vdpool-avd-dev-desktop`
+   - Personal Desktop: `vdpool-avd-dev-personal`
+   - Pooled RemoteApp: `vdpool-avd-dev-apps`
+   - Personal RemoteApp: `vdpool-avd-dev-personalapps`
+3. Check **Session hosts** tab for registered VMs (`vm-avd-dev-01`, `vm-avd-dev-02`, etc.)
+4. Verify **Application groups** show correct Microsoft-compliant names:
+   - Desktop types: `vdag-avd-dev-desktop` or `vdag-avd-dev-personal`
+   - RemoteApp types: `vdag-avd-dev-apps` or `vdag-avd-dev-personalapps`
 
 ### 2. User Access Testing
 1. Direct users to the [AVD web client](https://rdweb.wvd.microsoft.com/arm/webclient)
-2. **Desktop deployments**: Users should see desktop icons
-3. **RemoteApp deployments**: Users should see published applications
+2. **Desktop deployments**: Users should see desktop icons under workspace `vdws-avd-dev`
+3. **RemoteApp deployments**: Users should see published applications under workspace `vdws-avd-dev`
 
 ### 3. Configuration Verification
 ```powershell
+# NEW: Check Microsoft-compliant naming patterns used
+terraform output naming_convention
+
+# Example output:
+# {
+#   "app_group_pattern" = "vdag-avd-dev-desktop"
+#   "deployment_suffix" = "desktop"
+#   "follows_standards" = "Microsoft Cloud Adoption Framework"
+#   "host_pool_pattern" = "vdpool-avd-dev-desktop"
+#   "subnet_pattern" = "snet-avd-dev"
+#   "workspace_pattern" = "vdws-avd-dev"
+# }
+
 # Check deployment configuration
 terraform output deployment_config
 
 # List published applications (RemoteApp only)
 terraform output published_applications
 
-# Verify session hosts
+# Verify session hosts with Microsoft-compliant names
 terraform output session_host_names
+# Example output: ["vm-avd-dev-01", "vm-avd-dev-02"]
+
+# Get actual resource names for portal navigation
+terraform output host_pool_name        # e.g., "vdpool-avd-dev-desktop"
+terraform output application_group_name # e.g., "vdag-avd-dev-desktop"
+terraform output workspace_name        # e.g., "vdws-avd-dev"
 ```
 
 ## Managing Multiple Deployment Types

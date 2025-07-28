@@ -2,16 +2,31 @@
 
 This directory contains a **modular Terraform configuration** that deploys Azure Virtual Desktop (AVD) environments supporting **multiple deployment patterns**. The configuration supports pooled desktops, personal desktops, and RemoteApp deployments in both shared and dedicated models.
 
+**🏆 Enterprise-Grade Naming**: This configuration follows [**Microsoft Cloud Adoption Framework**](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) naming standards for professional, scalable infrastructure.
+
 ## Supported Deployment Types
 
 This configuration supports **four distinct AVD deployment patterns**:
 
-| Deployment Type | Description | Use Cases | Resource Sharing |
-|-----------------|-------------|-----------|------------------|
-| **`pooled_desktop`** | Traditional shared desktop environment | Call centers, task workers, training labs | Multiple users per VM |
-| **`personal_desktop`** | Dedicated 1:1 desktop assignments | Developers, power users, persistent workloads | One user per VM |
-| **`pooled_remoteapp`** | Shared published applications | Line-of-business apps, legacy applications | Multiple users per VM |
-| **`personal_remoteapp`** | Dedicated application access | Sensitive apps, compliance requirements | One user per VM |
+| Deployment Type | Description | Use Cases | Resource Sharing | Naming Suffix |
+|-----------------|-------------|-----------|------------------|---------------|
+| **`pooled_desktop`** | Traditional shared desktop environment | Call centers, task workers, training labs | Multiple users per VM | `desktop` |
+| **`personal_desktop`** | Dedicated 1:1 desktop assignments | Developers, power users, persistent workloads | One user per VM | `personal` |
+| **`pooled_remoteapp`** | Shared published applications | Line-of-business apps, legacy applications | Multiple users per VM | `apps` |
+| **`personal_remoteapp`** | Dedicated application access | Sensitive apps, compliance requirements | One user per VM | `personalapps` |
+
+## Microsoft-Compliant Resource Naming
+
+All resources follow **Microsoft Cloud Adoption Framework** naming standards with deployment-specific suffixes:
+
+| Resource Type | Pattern | Examples |
+|---------------|---------|----------|
+| **Host Pool** | `vdpool-{prefix}-{environment}-{suffix}` | `vdpool-avd-dev-desktop`, `vdpool-avd-prod-apps` |
+| **Application Group** | `vdag-{prefix}-{environment}-{suffix}` | `vdag-avd-dev-personal`, `vdag-avd-prod-personalapps` |
+| **Workspace** | `vdws-{prefix}-{environment}` | `vdws-avd-dev`, `vdws-avd-prod` |
+| **Subnet** | `snet-{prefix}-{environment}` | `snet-avd-dev`, `snet-avd-prod` |
+| **Virtual Network** | `vnet-{prefix}-{environment}` | `vnet-avd-dev`, `vnet-avd-prod` |
+| **Network Security Group** | `nsg-{prefix}-{environment}` | `nsg-avd-dev`, `nsg-avd-prod` |
 
 ## Architecture
 
@@ -22,14 +37,14 @@ graph TB
     subgraph "Azure Subscription"
         subgraph "Resource Group"
             subgraph "Azure Virtual Desktop Service"
-                WS["Workspace<br/>ws-avd-{env}"]
-                AG["Application Group<br/>ag-avd-{env}<br/>(Desktop Type)"]
-                HP["Host Pool<br/>hp-avd-{env}<br/>(Pooled, BreadthFirst)"]
+                WS["Workspace<br/>vdws-avd-{env}"]
+                AG["Application Group<br/>vdag-avd-{env}-{suffix}<br/>(Dynamic Type)"]
+                HP["Host Pool<br/>vdpool-avd-{env}-{suffix}<br/>(Dynamic Config)"]
             end
             
             subgraph "Networking"
                 VNET["Virtual Network<br/>vnet-avd-{env}<br/>(192.168.0.0/24)"]
-                SUBNET["Subnet<br/>subnet-avd-{env}<br/>(192.168.0.0/24)"]
+                SUBNET["Subnet<br/>snet-avd-{env}<br/>(192.168.0.0/24)"]
                 NSG["Network Security Group<br/>nsg-avd-{env}"]
             end
             
@@ -108,16 +123,19 @@ graph TB
 
 ### Key Components
 
-| Component | Purpose | Configuration |
-|-----------|---------|---------------|
+| Component | Purpose | Microsoft-Compliant Name Pattern |
+|-----------|---------|----------------------------------|
 | **Resource Group** | Container for all AVD resources | `rg-{prefix}-{environment}` |
-| **Virtual Network** | Isolated network for session hosts | Configurable CIDR (default: 192.168.0.0/24) |
-| **Host Pool** | Manages session host capacity and load balancing | **Dynamic**: Pooled or Personal based on deployment type |
-| **Application Group** | Defines published resources | **Dynamic**: Desktop or RemoteApp based on deployment type |
-| **Workspace** | User-facing portal aggregating app groups | Single workspace per environment |
-| **Session Hosts** | Windows 11 VMs running user sessions | **Dynamic**: Shared or dedicated based on deployment type |
+| **Virtual Network** | Isolated network for session hosts | `vnet-{prefix}-{environment}` ✅ |
+| **Subnet** | Session host network segment | `snet-{prefix}-{environment}` ✅ |
+| **Host Pool** | Manages session host capacity and load balancing | `vdpool-{prefix}-{environment}-{deployment-suffix}` ✅ |
+| **Application Group** | Defines published resources | `vdag-{prefix}-{environment}-{deployment-suffix}` ✅ |
+| **Workspace** | User-facing portal aggregating app groups | `vdws-{prefix}-{environment}` ✅ |
+| **Session Hosts** | Windows 11 VMs running user sessions | `vm-{prefix}-{environment}-{number}` ✅ |
 | **Published Applications** | Specific apps for RemoteApp deployments | **Conditional**: Only created for RemoteApp types |
 | **RBAC Assignments** | Security access control | Desktop Virtualization User + VM User Login roles |
+
+**✅ All names follow [Microsoft Cloud Adoption Framework](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) standards**
 
 ## Deployment Type Configuration Matrix
 
@@ -486,11 +504,48 @@ You will be prompted to confirm the destruction.  Destroying the resources will 
 
 | Variable | Purpose | Default | Notes |
 |----------|---------|---------|-------|
-| `environment` | Environment identifier (dev/test/prod) | `"dev"` | Appended to all resource names |
+| `deployment_type` | AVD deployment pattern | `"pooled_desktop"` | **New**: Determines naming suffix and configuration (`pooled_desktop`, `personal_desktop`, `pooled_remoteapp`, `personal_remoteapp`) |
+| `environment` | Environment identifier (dev/test/prod) | `"dev"` | Appended to all resource names following Microsoft standards |
+| `prefix` | Project/organization prefix | `"avd"` | Used in all resource names (`vdpool-{prefix}-{environment}-{suffix}`) |
 | `session_host_count` | Number of session host VMs to deploy | `1` | Scales the entire VM infrastructure |
 | `security_principal_object_ids` | Azure AD object IDs for desktop access | `[]` | **Required**: Must be populated before deployment |
 | `admin_password` | Local admin password for session hosts | - | **Required**: Must meet Azure complexity requirements |
+| `published_applications` | Applications for RemoteApp deployments | `[]` | **Required for RemoteApp**: List of applications to publish |
+| `load_balancer_type` | Load balancing algorithm for pooled types | `"BreadthFirst"` | **New**: `BreadthFirst` or `DepthFirst` (ignored for personal types) |
+| `personal_desktop_assignment_type` | Assignment for personal desktops | `"Automatic"` | **New**: `Automatic` or `Direct` user assignment |
 | `registration_token_expiration_hours` | Hours until registration token expires | `2` | Longer for dev (8h), shorter for prod (1-2h) |
-| `configuration_zip_file` | URL to Microsoft's DSC configuration | Microsoft's official URL | Contains the AddSessionHost DSC configuration |
 | `vm_size` | Azure VM size for session hosts | `"Standard_D4ds_v4"` | Choose based on user workload requirements |
-| `max_session_limit` | Max concurrent sessions per host | `2` | Balance user experience vs. cost |
+| `max_session_limit` | Max concurrent sessions per host | `2` | Balance user experience vs. cost (automatically set to 1 for personal types) |
+
+## Terraform Outputs
+
+### New: Microsoft-Compliant Naming Information
+
+The configuration now provides detailed naming information via the `naming_convention` output:
+
+```bash
+terraform output naming_convention
+```
+
+**Example output:**
+```json
+{
+  "app_group_pattern" = "vdag-avd-dev-desktop"
+  "deployment_suffix" = "desktop"
+  "follows_standards" = "Microsoft Cloud Adoption Framework"
+  "host_pool_pattern" = "vdpool-avd-dev-desktop"
+  "subnet_pattern" = "snet-avd-dev"
+  "workspace_pattern" = "vdws-avd-dev"
+}
+```
+
+### Other Key Outputs
+
+| Output | Description | Example Value |
+|--------|-------------|---------------|
+| `host_pool_name` | Microsoft-compliant host pool name | `vdpool-avd-dev-desktop` |
+| `application_group_name` | Microsoft-compliant application group name | `vdag-avd-dev-desktop` |
+| `workspace_name` | Microsoft-compliant workspace name | `vdws-avd-dev` |
+| `deployment_config` | Complete configuration details for the deployment | Configuration object with all settings |
+| `published_applications` | List of published apps (RemoteApp only) | Array of application details |
+| `session_host_names` | Names of deployed session host VMs | `["vm-avd-dev-01", "vm-avd-dev-02"]` |
