@@ -3,6 +3,12 @@
 * values can be used by other Terraform configurations or for reference when
 * managing the environment manually.  The workspace URL provides direct access
 * to the deployed desktops for testing.
+* 
+* Resource names follow Microsoft Cloud Adoption Framework naming standards:
+* - Host Pools: vdpool-[prefix]-[environment]-[deployment-suffix]
+* - Application Groups: vdag-[prefix]-[environment]-[deployment-suffix]
+* - Workspaces: vdws-[prefix]-[environment]
+* - Subnets: snet-[prefix]-[environment]
 */
 
 output "resource_group_name" {
@@ -11,7 +17,7 @@ output "resource_group_name" {
 }
 
 output "host_pool_name" {
-  description = "Name of the AVD host pool"
+  description = "Name of the AVD host pool (follows pattern: vdpool-[prefix]-[environment]-[deployment-suffix])"
   value       = azurerm_virtual_desktop_host_pool.avd.name
 }
 
@@ -21,7 +27,7 @@ output "host_pool_id" {
 }
 
 output "application_group_name" {
-  description = "Name of the AVD application group"
+  description = "Name of the AVD application group (follows pattern: vdag-[prefix]-[environment]-[deployment-suffix])"
   value       = azurerm_virtual_desktop_application_group.avd.name
 }
 
@@ -31,7 +37,7 @@ output "application_group_id" {
 }
 
 output "workspace_name" {
-  description = "Name of the AVD workspace"
+  description = "Name of the AVD workspace (follows pattern: vdws-[prefix]-[environment])"
   value       = azurerm_virtual_desktop_workspace.avd.name
 }
 
@@ -48,6 +54,18 @@ output "workspace_url" {
 output "deployment_type" {
   description = "The type of AVD deployment that was created"
   value       = var.deployment_type
+}
+
+output "naming_convention" {
+  description = "Microsoft-compliant naming patterns used for this deployment"
+  value = {
+    host_pool_pattern     = "vdpool-${var.prefix}-${var.environment}-${local.deployment_suffixes[var.deployment_type]}"
+    app_group_pattern     = "vdag-${var.prefix}-${var.environment}-${local.deployment_suffixes[var.deployment_type]}"
+    workspace_pattern     = "vdws-${var.prefix}-${var.environment}"
+    subnet_pattern        = "snet-${var.prefix}-${var.environment}"
+    deployment_suffix     = local.deployment_suffixes[var.deployment_type]
+    follows_standards     = "Microsoft Cloud Adoption Framework"
+  }
 }
 
 output "deployment_config" {
@@ -82,7 +100,7 @@ output "session_host_names" {
 }
 
 output "network_details" {
-  description = "Network configuration details"
+  description = "Network configuration details (subnet follows pattern: snet-[prefix]-[environment])"
   value = {
     vnet_name           = azurerm_virtual_network.avd.name
     vnet_address_space  = azurerm_virtual_network.avd.address_space

@@ -19,6 +19,22 @@ locals {
   }
   tags = merge(local.default_tags, var.tags)
 
+  # Microsoft-compliant deployment type suffixes for resource naming
+  # These suffixes align with Microsoft Cloud Adoption Framework naming standards
+  deployment_suffixes = {
+    pooled_desktop     = "desktop"
+    personal_desktop   = "personal" 
+    pooled_remoteapp   = "apps"
+    personal_remoteapp = "personalapps"
+  }
+  
+  # Microsoft-compliant resource names using official abbreviations
+  # Pattern: [microsoft-abbreviation]-[prefix]-[environment]-[deployment-suffix]
+  host_pool_name    = "vdpool-${var.prefix}-${var.environment}-${local.deployment_suffixes[var.deployment_type]}"
+  app_group_name    = "vdag-${var.prefix}-${var.environment}-${local.deployment_suffixes[var.deployment_type]}"
+  workspace_name    = "vdws-${var.prefix}-${var.environment}"  # Workspace serves all deployment types
+  subnet_name       = "snet-${var.prefix}-${var.environment}"
+
   # Deployment type configuration matrix
   # This matrix defines the specific settings for each AVD deployment pattern
   deployment_config = {
@@ -120,7 +136,7 @@ resource "azurerm_virtual_network" "avd" {
 }
 
 resource "azurerm_subnet" "avd" {
-  name                 = format("subnet-%s-%s", var.prefix, var.environment)
+  name                 = local.subnet_name
   resource_group_name  = azurerm_resource_group.avd.name
   virtual_network_name = azurerm_virtual_network.avd.name
   address_prefixes     = [var.subnet_address_prefix]
@@ -141,7 +157,7 @@ resource "azurerm_subnet_network_security_group_association" "avd" {
  * token is retrieved and referenced when installing the DSC extension.
  */
 resource "azurerm_virtual_desktop_host_pool" "avd" {
-  name                = format("hp-%s-%s", var.prefix, var.environment)
+  name                = local.host_pool_name
   location            = azurerm_resource_group.avd.location
   resource_group_name = azurerm_resource_group.avd.name
   type                = local.current_config.host_pool_type
@@ -318,7 +334,7 @@ locals {
  * naming is kept short to avoid exceeding Azure’s length restrictions.
  */
 resource "azurerm_virtual_desktop_application_group" "avd" {
-  name                = format("ag-%s-%s", var.prefix, var.environment)
+  name                = local.app_group_name
   location            = azurerm_resource_group.avd.location
   resource_group_name = azurerm_resource_group.avd.name
   host_pool_id        = azurerm_virtual_desktop_host_pool.avd.id
@@ -335,7 +351,7 @@ resource "azurerm_virtual_desktop_application_group" "avd" {
  * access is enabled to mirror the ARM template’s behaviour.
  */
 resource "azurerm_virtual_desktop_workspace" "avd" {
-  name                = format("ws-%s-%s", var.prefix, var.environment)
+  name                = local.workspace_name
   location            = azurerm_resource_group.avd.location
   resource_group_name = azurerm_resource_group.avd.name
   friendly_name       = "${var.prefix}-${var.environment}-workspace"
