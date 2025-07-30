@@ -43,6 +43,56 @@ All resources follow [**Microsoft Cloud Adoption Framework**](https://learn.micr
 | **Development** | Pooled RemoteApp | `dev-pooled-remoteapp.auto.tfvars` | App testing, legacy apps | `vdpool-avd-dev-apps` |
 | **Production** | Personal RemoteApp | `prod-personal-remoteapp.auto.tfvars` | Executive/compliance apps | `vdpool-avd-prod-personalapps` |
 
+## Authentication Setup
+
+For consistent authentication across deployments, you can create a `set-auth.ps1` script to handle Azure login and context switching:
+
+```powershell
+# set-auth.ps1 - Sample Azure Authentication Script
+param(
+    [Parameter(Mandatory=$false)]
+    [string]$SubscriptionId,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$Environment = "dev"
+)
+
+Write-Host "=== Azure AVD Authentication Setup ===" -ForegroundColor Green
+
+# Login to Azure (interactive if not already logged in)
+$context = az account show 2>$null | ConvertFrom-Json
+if (-not $context) {
+    Write-Host "Logging into Azure..." -ForegroundColor Yellow
+    az login
+}
+
+# Set subscription if provided
+if ($SubscriptionId) {
+    Write-Host "Setting subscription: $SubscriptionId" -ForegroundColor Cyan
+    az account set --subscription $SubscriptionId
+}
+
+# Display current context
+$currentContext = az account show | ConvertFrom-Json
+Write-Host "✓ Authenticated as: $($currentContext.user.name)" -ForegroundColor Green
+Write-Host "✓ Subscription: $($currentContext.name)" -ForegroundColor Green
+Write-Host "✓ Environment: $Environment" -ForegroundColor Green
+
+Write-Host "`nReady for Terraform deployment!" -ForegroundColor Green
+```
+
+**Usage Examples:**
+```powershell
+# Basic login and context check
+.\set-auth.ps1
+
+# Login with specific subscription
+.\set-auth.ps1 -SubscriptionId "your-subscription-id"
+
+# Set environment context for deployment
+.\set-auth.ps1 -Environment "prod"
+```
+
 ## Before You Deploy
 
 ### 1. Required Customizations
@@ -94,7 +144,7 @@ Get-AzADGroup -DisplayName "AVD Users" | Select-Object Id
 
 ### 1. Pooled Desktop (Traditional AVD)
 ```powershell
-# Set authentication
+# Set authentication (see Authentication Setup section above)
 .\set-auth.ps1
 
 # Initialize and deploy
@@ -106,7 +156,7 @@ terraform apply -var-file=dev-pooled-desktop.auto.tfvars
 
 ### 2. Personal Desktop (Dedicated VMs)
 ```powershell
-# Set authentication
+# Set authentication (see Authentication Setup section above)
 .\set-auth.ps1
 
 # Initialize and deploy
@@ -118,7 +168,7 @@ terraform apply -var-file=dev-personal-desktop.auto.tfvars
 
 ### 3. Pooled RemoteApp (Shared Applications)
 ```powershell
-# Set authentication
+# Set authentication (see Authentication Setup section above)
 .\set-auth.ps1
 
 # Initialize and deploy
@@ -130,7 +180,7 @@ terraform apply -var-file=dev-pooled-remoteapp.auto.tfvars
 
 ### 4. Personal RemoteApp (Dedicated App Access)
 ```powershell
-# Set authentication
+# Set authentication (see Authentication Setup section above)
 .\set-auth.ps1
 
 # Initialize and deploy
