@@ -2,9 +2,7 @@
 *.tfstate
 *.tfstate.*
 *.tfplan
-*.tfvars
-!dev.auto.tfvars
-!prod.auto.tfvars
+!*.tfvars
 !*.auto.tfvars.example
 
 # Terraform directories

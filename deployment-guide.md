@@ -306,9 +306,85 @@ terraform apply -var-file=prod-pooled-remoteapp.auto.tfvars
 | Issue | Deployment Type | Solution |
 |-------|----------------|----------|
 | **No applications visible** | RemoteApp | Check `published_applications` configuration and app paths |
+| **RemoteApp icons not showing** | RemoteApp | Fix icon_path configuration (see RemoteApp Icon Troubleshooting below) |
 | **Users can't connect** | Personal | Verify sufficient session hosts for user count |
 | **Poor performance** | Pooled | Reduce `max_session_limit` or increase VM size |
 | **Registration fails** | All | Check registration token hasn't expired |
+
+### RemoteApp Icon Troubleshooting
+
+**Problem**: RemoteApp icons are not displaying in the AVD client portal.
+
+**Root Cause**: The `icon_path` is incorrectly configured to point to the executable instead of the actual icon file.
+
+**Solution**: Update your RemoteApp configuration with proper icon paths:
+
+```hcl
+# INCORRECT - Using executable path as icon path
+published_applications = [
+  {
+    name         = "notepad"
+    display_name = "Notepad"
+    path         = "C:\\Windows\\System32\\notepad.exe"
+    icon_path    = "C:\\Windows\\System32\\notepad.exe"  # ❌ Wrong
+  }
+]
+
+# CORRECT - Using actual icon file paths
+published_applications = [
+  {
+    name         = "notepad"
+    display_name = "Notepad"
+    path         = "C:\\Windows\\System32\\notepad.exe"
+    icon_path    = "C:\\Windows\\System32\\notepad.exe,0"  # ✅ Correct - uses icon resource
+  },
+  {
+    name         = "calculator"
+    display_name = "Calculator"
+    path         = "C:\\Windows\\System32\\calc.exe"
+    icon_path    = "C:\\Windows\\System32\\calc.exe,0"  # ✅ Correct - uses icon resource
+  },
+  {
+    name         = "word"
+    display_name = "Microsoft Word"
+    path         = "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE"
+    icon_path    = "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE,0"  # ✅ Correct
+  }
+]
+```
+
+**Icon Path Best Practices**:
+
+1. **For Windows built-in applications**: Use `executable.exe,0` format to extract the first icon resource
+2. **For Office applications**: Use `executable.exe,0` format (Office apps have embedded icons)
+3. **For custom applications**: Point to the actual `.ico` file if available
+4. **For applications without icons**: Leave `icon_path` empty or omit it entirely
+
+**Common Icon Path Examples**:
+```hcl
+# Windows built-in apps
+icon_path = "C:\\Windows\\System32\\notepad.exe,0"
+icon_path = "C:\\Windows\\System32\\calc.exe,0"
+icon_path = "C:\\Windows\\System32\\mspaint.exe,0"
+
+# Office applications
+icon_path = "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE,0"
+icon_path = "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE,0"
+icon_path = "C:\\Program Files\\Microsoft Office\\root\\Office16\\POWERPNT.EXE,0"
+
+# Custom applications with .ico files
+icon_path = "C:\\Program Files\\MyApp\\icon.ico"
+
+# Applications without specific icons (will use default)
+icon_path = ""  # or omit entirely
+```
+
+**Verification Steps**:
+1. Update your `.tfvars` file with correct icon paths
+2. Run `terraform plan` and `terraform apply` to update the configuration
+3. Wait 5-10 minutes for changes to propagate
+4. Check the AVD web client portal for updated icons
+5. If icons still don't appear, try clearing browser cache or using incognito mode
 
 ### Deployment Type Validation Errors
 
