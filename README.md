@@ -292,6 +292,56 @@ guidance.
 3. **Choose your deployment type** by selecting the appropriate `.tfvars` file or creating a custom one
 4. **Deploy** using Terraform
 
+### Authentication Setup
+
+For consistent authentication across deployments, you can create a `set-auth.ps1` script to handle Azure login and context switching:
+
+```powershell
+# set-auth.ps1 - Sample Azure Authentication Script
+param(
+    [Parameter(Mandatory=$false)]
+    [string]$SubscriptionId,
+    
+    [Parameter(Mandatory=$false)]
+    [string]$Environment = "dev"
+)
+
+Write-Host "=== Azure AVD Authentication Setup ===" -ForegroundColor Green
+
+# Login to Azure (interactive if not already logged in)
+$context = az account show 2>$null | ConvertFrom-Json
+if (-not $context) {
+    Write-Host "Logging into Azure..." -ForegroundColor Yellow
+    az login
+}
+
+# Set subscription if provided
+if ($SubscriptionId) {
+    Write-Host "Setting subscription: $SubscriptionId" -ForegroundColor Cyan
+    az account set --subscription $SubscriptionId
+}
+
+# Display current context
+$currentContext = az account show | ConvertFrom-Json
+Write-Host "✓ Authenticated as: $($currentContext.user.name)" -ForegroundColor Green
+Write-Host "✓ Subscription: $($currentContext.name)" -ForegroundColor Green
+Write-Host "✓ Environment: $Environment" -ForegroundColor Green
+
+Write-Host "`nReady for Terraform deployment!" -ForegroundColor Green
+```
+
+**Usage Examples:**
+```powershell
+# Basic login and context check
+.\set-auth.ps1
+
+# Login with specific subscription
+.\set-auth.ps1 -SubscriptionId "your-subscription-id"
+
+# Set environment context for deployment
+.\set-auth.ps1 -Environment "prod"
+```
+
 ### Deployment Type Examples
 
 The repository includes pre-configured examples for each deployment pattern:
