@@ -273,6 +273,7 @@ resource "azurerm_virtual_desktop_application" "apps" {
   command_line_argument_policy = each.value.command_line_setting
   show_in_portal              = each.value.show_in_portal
   icon_path                   = each.value.icon_path != "" ? each.value.icon_path : null
+  icon_index                  = each.value.icon_index
 }
 
 /*

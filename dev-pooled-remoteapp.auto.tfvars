@@ -31,7 +31,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "DoNotAllow"    # Users cannot modify command line
     show_in_portal         = true
-    icon_path             = "C:\\Windows\\System32\\calc.exe,0"
+    icon_path             = "C:\\Windows\\System32\\calc.exe"
+    icon_index            = 0
   },
   {
     name                    = "notepad"
@@ -41,7 +42,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "Allow"         # Users can open specific files
     show_in_portal         = true
-    icon_path             = "C:\\Windows\\System32\\notepad.exe,0"
+    icon_path             = "C:\\Windows\\System32\\notepad.exe"
+    icon_index            = 0
   },
   {
     name                    = "mspaint"
@@ -51,7 +53,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "DoNotAllow"
     show_in_portal         = true
-    icon_path             = "C:\\Windows\\System32\\mspaint.exe,0"
+    icon_path             = "C:\\Windows\\System32\\mspaint.exe"
+    icon_index            = 0
   },
   {
     name                    = "wordpad"
@@ -61,7 +64,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "Allow"         # Users can open documents
     show_in_portal         = true
-    icon_path             = "C:\\Program Files\\Windows NT\\Accessories\\wordpad.exe,0"
+    icon_path             = "C:\\Program Files\\Windows NT\\Accessories\\wordpad.exe"
+    icon_index            = 0
   }
 ]
 

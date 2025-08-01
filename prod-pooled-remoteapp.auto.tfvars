@@ -32,6 +32,7 @@ published_applications = [
     command_line_setting   = "DoNotAllow"    # Secure - no command line modification
     show_in_portal         = true
     icon_path             = "C:\\Program Files (x86)\\SAP\\FrontEnd\\SAPgui\\saplogon.ico"
+    icon_index            = 0
   },
   {
     name                    = "oracle-forms"
@@ -41,7 +42,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "DoNotAllow"
     show_in_portal         = true
-    icon_path             = "C:\\Oracle\\Forms\\bin\\frmweb.exe,0"
+    icon_path             = "C:\\Oracle\\Forms\\bin\\frmweb.exe"
+    icon_index            = 0
   },
   {
     name                    = "autocad"
@@ -51,7 +53,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "Allow"         # Allow opening specific drawing files
     show_in_portal         = true
-    icon_path             = "C:\\Program Files\\Autodesk\\AutoCAD 2024\\acad.exe,0"
+    icon_path             = "C:\\Program Files\\Autodesk\\AutoCAD 2024\\acad.exe"
+    icon_index            = 0
   },
   {
     name                    = "excel"
@@ -61,7 +64,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "Allow"         # Allow opening specific files
     show_in_portal         = true
-    icon_path             = "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE,0"
+    icon_path             = "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE"
+    icon_index            = 0
   },
   {
     name                    = "powerbi-desktop"
@@ -71,7 +75,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "Allow"
     show_in_portal         = true
-    icon_path             = "C:\\Program Files\\Microsoft Power BI Desktop\\bin\\PBIDesktop.exe,0"
+    icon_path             = "C:\\Program Files\\Microsoft Power BI Desktop\\bin\\PBIDesktop.exe"
+    icon_index            = 0
   },
   {
     name                    = "sql-management-studio"
@@ -81,7 +86,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "Allow"         # Allow connection parameters
     show_in_portal         = true
-    icon_path             = "C:\\Program Files (x86)\\Microsoft SQL Server Management Studio 19\\Common7\\IDE\\Ssms.exe,0"
+    icon_path             = "C:\\Program Files (x86)\\Microsoft SQL Server Management Studio 19\\Common7\\IDE\\Ssms.exe"
+    icon_index            = 0
   }
 ]
 

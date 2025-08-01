@@ -32,6 +32,7 @@ published_applications = [
     command_line_setting   = "Require"       # Command line required for security
     show_in_portal         = true
     icon_path             = "C:\\Program Files\\FinancialApp\\icon.ico"
+    icon_index            = 0
   },
   {
     name                    = "reporting-tool"
@@ -41,7 +42,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "DoNotAllow"
     show_in_portal         = true
-    icon_path             = "C:\\Program Files\\ReportingTool\\reports.exe,0"
+    icon_path             = "C:\\Program Files\\ReportingTool\\reports.exe"
+    icon_index            = 0
   },
   {
     name                    = "excel"
@@ -51,7 +53,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "Allow"         # Allow opening specific files
     show_in_portal         = true
-    icon_path             = "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE,0"
+    icon_path             = "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE"
+    icon_index            = 0
   }
 ]
 

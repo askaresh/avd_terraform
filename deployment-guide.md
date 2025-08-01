@@ -317,66 +317,81 @@ terraform apply -var-file=prod-pooled-remoteapp.auto.tfvars
 
 **Root Cause**: The `icon_path` is incorrectly configured to point to the executable instead of the actual icon file.
 
-**Solution**: Update your RemoteApp configuration with proper icon paths:
+**Solution**: Update your RemoteApp configuration with proper icon paths and icon_index:
 
 ```hcl
-# INCORRECT - Using executable path as icon path
+# INCORRECT - Using executable path as icon path without icon_index
 published_applications = [
   {
     name         = "notepad"
     display_name = "Notepad"
     path         = "C:\\Windows\\System32\\notepad.exe"
-    icon_path    = "C:\\Windows\\System32\\notepad.exe"  # ❌ Wrong
+    icon_path    = "C:\\Windows\\System32\\notepad.exe"  # ❌ Wrong - missing icon_index
   }
 ]
 
-# CORRECT - Using actual icon file paths
+# CORRECT - Using executable path with icon_index parameter
 published_applications = [
   {
     name         = "notepad"
     display_name = "Notepad"
     path         = "C:\\Windows\\System32\\notepad.exe"
-    icon_path    = "C:\\Windows\\System32\\notepad.exe,0"  # ✅ Correct - uses icon resource
+    icon_path    = "C:\\Windows\\System32\\notepad.exe"  # ✅ Correct - executable path
+    icon_index   = 0                                       # ✅ Correct - extract first icon
   },
   {
     name         = "calculator"
     display_name = "Calculator"
     path         = "C:\\Windows\\System32\\calc.exe"
-    icon_path    = "C:\\Windows\\System32\\calc.exe,0"  # ✅ Correct - uses icon resource
+    icon_path    = "C:\\Windows\\System32\\calc.exe"      # ✅ Correct - executable path
+    icon_index   = 0                                       # ✅ Correct - extract first icon
   },
   {
     name         = "word"
     display_name = "Microsoft Word"
     path         = "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE"
-    icon_path    = "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE,0"  # ✅ Correct
+    icon_path    = "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE"  # ✅ Correct
+    icon_index   = 0                                                                   # ✅ Correct
   }
 ]
 ```
 
 **Icon Path Best Practices**:
 
-1. **For Windows built-in applications**: Use `executable.exe,0` format to extract the first icon resource
-2. **For Office applications**: Use `executable.exe,0` format (Office apps have embedded icons)
+1. **For Windows built-in applications**: Use executable path with `icon_index = 0` to extract the first icon resource
+2. **For Office applications**: Use executable path with `icon_index = 0` (Office apps have embedded icons)
 3. **For custom applications**: Point to the actual `.ico` file if available
 4. **For applications without icons**: Leave `icon_path` empty or omit it entirely
 
-**Common Icon Path Examples**:
+**Common Icon Configuration Examples**:
 ```hcl
 # Windows built-in apps
-icon_path = "C:\\Windows\\System32\\notepad.exe,0"
-icon_path = "C:\\Windows\\System32\\calc.exe,0"
-icon_path = "C:\\Windows\\System32\\mspaint.exe,0"
+icon_path = "C:\\Windows\\System32\\notepad.exe"
+icon_index = 0
+
+icon_path = "C:\\Windows\\System32\\calc.exe"
+icon_index = 0
+
+icon_path = "C:\\Windows\\System32\\mspaint.exe"
+icon_index = 0
 
 # Office applications
-icon_path = "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE,0"
-icon_path = "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE,0"
-icon_path = "C:\\Program Files\\Microsoft Office\\root\\Office16\\POWERPNT.EXE,0"
+icon_path = "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE"
+icon_index = 0
+
+icon_path = "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE"
+icon_index = 0
+
+icon_path = "C:\\Program Files\\Microsoft Office\\root\\Office16\\POWERPNT.EXE"
+icon_index = 0
 
 # Custom applications with .ico files
 icon_path = "C:\\Program Files\\MyApp\\icon.ico"
+icon_index = 0  # Not needed for .ico files, but won't hurt
 
 # Applications without specific icons (will use default)
 icon_path = ""  # or omit entirely
+icon_index = 0  # Not needed when icon_path is empty
 ```
 
 **Verification Steps**:
@@ -385,6 +400,60 @@ icon_path = ""  # or omit entirely
 3. Wait 5-10 minutes for changes to propagate
 4. Check the AVD web client portal for updated icons
 5. If icons still don't appear, try clearing browser cache or using incognito mode
+
+**Additional Troubleshooting Steps**:
+
+If icons still don't appear after applying the correct configuration:
+
+1. **Check Application Group Type**: Ensure your application group is set to `RemoteApp` type, not `Desktop`
+2. **Verify Application Paths**: Ensure the executable paths actually exist on the session host VMs
+3. **Check Session Host Registration**: Verify session hosts are properly registered and healthy
+4. **Test with Simple Applications**: Try with basic Windows apps first (notepad, calc) before complex applications
+5. **Check Azure Portal**: Verify applications appear in Azure Portal → AVD → Application Groups → Your App Group → Applications
+6. **User Permissions**: Ensure users have the correct RBAC permissions assigned
+7. **Workspace Association**: Verify the application group is properly associated with the workspace
+
+**Common Issues and Solutions**:
+
+| Issue | Symptom | Solution |
+|-------|---------|----------|
+| **Application Group Type** | Apps don't appear in client | Ensure `app_group_type = "RemoteApp"` |
+| **Missing Executables** | Apps fail to launch | Verify paths exist on session host VMs |
+| **Session Host Issues** | Apps show as unavailable | Check session host registration and health |
+| **Permission Issues** | Users can't see apps | Verify RBAC assignments and user permissions |
+| **Workspace Issues** | Apps not in user feed | Check workspace-application group association |
+| **Icon Cache** | Icons don't update | Clear browser cache, wait 15-30 minutes |
+| **Application State** | Apps show as disabled | Check if applications are enabled in Azure portal |
+
+**Testing with Minimal Configuration**:
+
+If icons still don't appear, test with this minimal configuration to isolate the issue:
+
+```hcl
+# Minimal test configuration - single application
+published_applications = [
+  {
+    name                    = "notepad"
+    display_name           = "Notepad"
+    description            = "Windows Notepad"
+    path                   = "C:\\Windows\\System32\\notepad.exe"
+    command_line_arguments = ""
+    command_line_setting   = "DoNotAllow"
+    show_in_portal         = true
+    icon_path             = "C:\\Windows\\System32\\notepad.exe"
+    icon_index            = 0
+  }
+]
+```
+
+**Step-by-Step Debugging**:
+
+1. **Deploy minimal configuration** with just one simple application (notepad)
+2. **Check Azure Portal** → AVD → Application Groups → Your App Group → Applications
+3. **Verify application appears** in the portal with correct icon
+4. **Test user access** via AVD web client
+5. **If minimal config works**, gradually add more applications
+6. **If minimal config fails**, check session host registration and permissions
 
 ### Deployment Type Validation Errors
 

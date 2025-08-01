@@ -31,7 +31,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "Allow"         # Allow opening specific files/folders
     show_in_portal         = true
-    icon_path             = "C:\\Users\\%username%\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe,0"
+    icon_path             = "C:\\Users\\%username%\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe"
+    icon_index            = 0
   },
   {
     name                    = "postman"
@@ -41,7 +42,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "DoNotAllow"
     show_in_portal         = true
-    icon_path             = "C:\\Users\\%username%\\AppData\\Local\\Postman\\Postman.exe,0"
+    icon_path             = "C:\\Users\\%username%\\AppData\\Local\\Postman\\Postman.exe"
+    icon_index            = 0
   },
   {
     name                    = "git-bash"
@@ -51,7 +53,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "Allow"         # Allow command line for git operations
     show_in_portal         = true
-    icon_path             = "C:\\Program Files\\Git\\git-bash.exe,0"
+    icon_path             = "C:\\Program Files\\Git\\git-bash.exe"
+    icon_index            = 0
   },
   {
     name                    = "notepad-plus-plus"
@@ -61,7 +64,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "Allow"         # Allow opening specific files
     show_in_portal         = true
-    icon_path             = "C:\\Program Files\\Notepad++\\notepad++.exe,0"
+    icon_path             = "C:\\Program Files\\Notepad++\\notepad++.exe"
+    icon_index            = 0
   },
   {
     name                    = "windows-terminal"
@@ -71,7 +75,8 @@ published_applications = [
     command_line_arguments = ""
     command_line_setting   = "Allow"         # Allow command line parameters
     show_in_portal         = true
-    icon_path             = "C:\\Program Files\\WindowsApps\\Microsoft.WindowsTerminal_1.18.3181.0_x64__8wekyb3d8bbwe\\wt.exe,0"
+    icon_path             = "C:\\Program Files\\WindowsApps\\Microsoft.WindowsTerminal_1.18.3181.0_x64__8wekyb3d8bbwe\\wt.exe"
+    icon_index            = 0
   }
 ]
 

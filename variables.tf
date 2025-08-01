@@ -142,6 +142,7 @@ variable "published_applications" {
     command_line_setting        = optional(string, "DoNotAllow")
     show_in_portal             = optional(bool, true)
     icon_path                  = optional(string, "")
+    icon_index                 = optional(number, 0)
   }))
   default = []
   
