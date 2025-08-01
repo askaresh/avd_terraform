@@ -43,6 +43,13 @@ All resources follow [**Microsoft Cloud Adoption Framework**](https://learn.micr
 | **Development** | Pooled RemoteApp | `dev-pooled-remoteapp.auto.tfvars` | App testing, legacy apps | `vdpool-avd-dev-apps` |
 | **Production** | Personal RemoteApp | `prod-personal-remoteapp.auto.tfvars` | Executive/compliance apps | `vdpool-avd-prod-personalapps` |
 
+### Enhanced Deployment Options (with Monitoring & Scaling)
+
+| Environment | Deployment Type | File | Features | Use Case |
+|-------------|----------------|------|----------|----------|
+| **Development** | Pooled Desktop + Monitoring | `dev-pooled-desktop-with-monitoring.auto.tfvars` | Monitoring, Scaling, Dashboards | Development with cost optimization |
+| **Production** | Pooled RemoteApp + Monitoring | `prod-pooled-remoteapp-with-monitoring.auto.tfvars` | Monitoring, Scaling, Dashboards | Production apps with insights |
+
 ## Authentication Setup
 
 For consistent authentication across deployments, you can create a `set-auth.ps1` script to handle Azure login and context switching:
@@ -112,6 +119,13 @@ Write-Host "`nReady for Terraform deployment!" -ForegroundColor Green
 #### For Personal Deployments (`personal_*` files):
 - **`session_host_count`** - Should match the number of users requiring access
 - Consider higher VM sizes for dedicated user resources
+
+#### For Monitoring-Enabled Deployments (`*with-monitoring*` files):
+- **`enable_monitoring`** - Set to `true` to enable comprehensive monitoring
+- **`enable_scaling_plans`** - Set to `true` for cost optimization (recommended for pooled deployments)
+- **`enable_dashboards`** - Set to `true` for custom insights dashboards
+- **`monitoring_retention_days`** - Choose retention period (30, 60, 90, 120, 180, 365, 730 days)
+- **`cost_alert_threshold`** - Set daily cost threshold for alerts
 
 ### 3. Optional Customizations
 
@@ -190,6 +204,30 @@ terraform plan -var-file=prod-personal-remoteapp.auto.tfvars
 terraform apply -var-file=prod-personal-remoteapp.auto.tfvars
 ```
 
+### 5. Development Pooled Desktop with Monitoring & Scaling
+```powershell
+# Set authentication (see Authentication Setup section above)
+.\set-auth.ps1
+
+# Initialize and deploy with monitoring
+terraform init
+terraform workspace new dev-pooled-desktop-monitoring
+terraform plan -var-file=dev-pooled-desktop-with-monitoring.auto.tfvars
+terraform apply -var-file=dev-pooled-desktop-with-monitoring.auto.tfvars
+```
+
+### 6. Production Pooled RemoteApp with Monitoring & Scaling
+```powershell
+# Set authentication (see Authentication Setup section above)
+.\set-auth.ps1
+
+# Initialize and deploy with monitoring
+terraform init
+terraform workspace new prod-pooled-remoteapp-monitoring
+terraform plan -var-file=prod-pooled-remoteapp-with-monitoring.auto.tfvars
+terraform apply -var-file=prod-pooled-remoteapp-with-monitoring.auto.tfvars
+```
+
 ## Resource Specifications by Deployment Type
 
 ### Pooled Desktop
@@ -264,6 +302,30 @@ terraform output session_host_names
 terraform output host_pool_name        # e.g., "vdpool-avd-dev-desktop"
 terraform output application_group_name # e.g., "vdag-avd-dev-desktop"
 terraform output workspace_name        # e.g., "vdws-avd-dev"
+
+# NEW: Check monitoring and scaling configuration (if enabled)
+terraform output monitoring_insights
+
+# Example output:
+# {
+#   "monitoring_enabled" = true
+#   "scaling_enabled" = true
+#   "cost_alerts_enabled" = true
+#   "dashboard_enabled" = true
+#   "retention_days" = 30
+#   "scaling_schedules" = 2
+#   "deployment_type" = "pooled_desktop"
+#   "environment" = "dev"
+#   "resource_group" = "rg-avd-dev"
+# }
+
+# Get quick access links
+terraform output quick_links
+
+# Check monitoring resources (if enabled)
+terraform output log_analytics_workspace_name
+terraform output scaling_plan_name
+terraform output dashboard_name
 ```
 
 ## Managing Multiple Deployment Types
@@ -298,6 +360,130 @@ terraform apply -var-file=prod-personal-desktop.auto.tfvars
 terraform workspace select remoteapps
 terraform apply -var-file=prod-pooled-remoteapp.auto.tfvars
 ```
+
+## Monitoring and Scaling Features
+
+### Overview
+
+The AVD Terraform configuration now includes comprehensive monitoring, scaling, and dashboard capabilities that can be enabled for any deployment type. These features provide:
+
+- **Cost Optimization**: Automatic scaling based on usage patterns
+- **Operational Visibility**: Real-time monitoring and insights
+- **Proactive Management**: Alerts and notifications
+- **Performance Tracking**: Custom dashboards with key metrics
+
+### Feature Matrix
+
+| Feature | Description | Default | Recommended For |
+|---------|-------------|---------|-----------------|
+| **Monitoring** | Log Analytics workspace with diagnostic settings | Disabled | All environments |
+| **Scaling Plans** | Automatic session host scaling | Disabled | Pooled deployments |
+| **Cost Alerts** | Daily cost threshold monitoring | Disabled | Production environments |
+| **Dashboards** | Custom Azure dashboards | Disabled | All environments |
+
+### Scaling Plan Behavior
+
+#### Development Environment
+- **Weekdays**: 7:00 AM - 9:00 PM (100% capacity during peak)
+- **Weekends**: 9:00 AM - 6:00 PM (20% capacity, scale to 0% off-hours)
+- **Aggressive scaling** for maximum cost savings
+
+#### Production Environment
+- **Weekdays**: 6:00 AM - 10:00 PM (100% capacity during peak)
+- **Weekends**: 8:00 AM - 8:00 PM (40% capacity, 20% off-hours)
+- **Conservative scaling** for reliability
+
+### Monitoring Capabilities
+
+#### Log Analytics Workspace
+- **Host Pool Logs**: Connection, error, management, and registration events
+- **Session Host Metrics**: CPU, memory, disk, and performance data
+- **Custom Queries**: Pre-built queries for common AVD scenarios
+- **Retention Options**: 30, 60, 90, 120, 180, 365, or 730 days
+
+#### Diagnostic Settings
+- **AVD Host Pool**: All AVD-specific logs and events
+- **Session Host VMs**: Performance metrics and health data
+- **Real-time Monitoring**: Live data streaming to Log Analytics
+
+### Dashboard Features
+
+#### Key Metrics Displayed
+- **Session Metrics**: Active sessions, peak usage, total users
+- **Performance Data**: CPU, memory, disk utilization
+- **Cost Insights**: Daily/monthly costs, cost per user
+- **Health Status**: Host pool, session hosts, applications
+- **Scaling Status**: Last scale up/down, scaling plan health
+
+#### Dashboard Sections
+1. **Overview**: Environment and deployment information
+2. **Navigation**: Quick links to Azure resources
+3. **Session Metrics**: Real-time session data
+4. **Performance**: Resource utilization
+5. **Cost Analysis**: Spending insights
+6. **Health Overview**: System status
+7. **Events & Alerts**: Recent activity and notifications
+
+### Cost Optimization
+
+#### Scaling Plan Benefits
+- **Automatic Scaling**: Session hosts scale up/down based on usage
+- **Cost Savings**: 40-70% reduction in compute costs
+- **User Experience**: Maintains performance during peak hours
+- **Operational Efficiency**: Reduces manual scaling tasks
+
+#### Cost Alert Features
+- **Daily Thresholds**: Configurable cost limits
+- **Email Notifications**: Immediate alerts when thresholds exceeded
+- **Budget Tracking**: Real-time cost monitoring
+- **Trend Analysis**: Historical cost patterns
+
+### Enabling Features
+
+#### For New Deployments
+Use the monitoring-enabled `.tfvars` files:
+```powershell
+# Development with monitoring
+terraform apply -var-file=dev-pooled-desktop-with-monitoring.auto.tfvars
+
+# Production with monitoring
+terraform apply -var-file=prod-pooled-remoteapp-with-monitoring.auto.tfvars
+```
+
+#### For Existing Deployments
+Add monitoring variables to your existing `.tfvars` file:
+```hcl
+# Enable monitoring features
+enable_monitoring = true
+enable_scaling_plans = true
+enable_cost_alerts = true
+enable_dashboards = true
+
+# Configure settings
+monitoring_retention_days = 30
+cost_alert_threshold = 100
+dashboard_refresh_interval = 15
+```
+
+### Best Practices
+
+#### Scaling Plan Configuration
+- **Enable for pooled deployments** (desktop and RemoteApp)
+- **Disable for personal deployments** (dedicated VMs)
+- **Monitor scaling effectiveness** using dashboard metrics
+- **Adjust schedules** based on actual usage patterns
+
+#### Monitoring Configuration
+- **Use 30-day retention** for development environments
+- **Use 90-day retention** for production environments
+- **Enable cost alerts** for all production deployments
+- **Review dashboard metrics** regularly
+
+#### Cost Optimization
+- **Set realistic cost thresholds** based on expected usage
+- **Monitor scaling plan performance** monthly
+- **Adjust VM sizes** based on performance data
+- **Use reserved instances** for predictable workloads
 
 ## Troubleshooting
 

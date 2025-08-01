@@ -113,3 +113,93 @@ output "registration_token_expiration" {
   description = "When the host pool registration token expires"
   value       = azurerm_virtual_desktop_host_pool_registration_info.avd.expiration_date
 }
+
+# =============================================================================
+# MONITORING AND SCALING OUTPUTS
+# =============================================================================
+
+output "monitoring_enabled" {
+  description = "Whether monitoring features are enabled for this deployment"
+  value       = var.enable_monitoring
+}
+
+output "log_analytics_workspace_id" {
+  description = "Resource ID of the Log Analytics workspace (if monitoring is enabled)"
+  value       = var.enable_monitoring ? azurerm_log_analytics_workspace.avd_monitoring[0].id : null
+}
+
+output "log_analytics_workspace_name" {
+  description = "Name of the Log Analytics workspace (if monitoring is enabled)"
+  value       = var.enable_monitoring ? azurerm_log_analytics_workspace.avd_monitoring[0].name : null
+}
+
+output "scaling_plans_enabled" {
+  description = "Whether scaling plans are enabled for this deployment"
+  value       = var.enable_scaling_plans
+}
+
+output "scaling_plan_id" {
+  description = "Resource ID of the AVD scaling plan (if scaling is enabled)"
+  value       = var.enable_scaling_plans && local.should_enable_scaling ? azurerm_virtual_desktop_scaling_plan.avd[0].id : null
+}
+
+output "scaling_plan_name" {
+  description = "Name of the AVD scaling plan (if scaling is enabled)"
+  value       = var.enable_scaling_plans && local.should_enable_scaling ? azurerm_virtual_desktop_scaling_plan.avd[0].name : null
+}
+
+output "scaling_schedules" {
+  description = "Scaling schedules configured for this deployment"
+  value       = var.enable_scaling_plans && local.should_enable_scaling ? local.scaling_schedules : []
+}
+
+output "cost_alerts_enabled" {
+  description = "Whether cost monitoring alerts are enabled"
+  value       = var.enable_cost_alerts
+}
+
+output "cost_alert_threshold" {
+  description = "Cost alert threshold in USD"
+  value       = var.enable_cost_alerts ? var.cost_alert_threshold : null
+}
+
+output "dashboard_enabled" {
+  description = "Whether custom dashboards are enabled for this deployment"
+  value       = var.enable_dashboards
+}
+
+output "dashboard_id" {
+  description = "Resource ID of the custom AVD dashboard (if dashboards are enabled)"
+  value       = var.enable_dashboards ? azurerm_portal_dashboard.avd_insights[0].id : null
+}
+
+output "dashboard_name" {
+  description = "Name of the custom AVD dashboard (if dashboards are enabled)"
+  value       = var.enable_dashboards ? azurerm_portal_dashboard.avd_insights[0].name : null
+}
+
+output "monitoring_insights" {
+  description = "Comprehensive monitoring and scaling insights for this deployment"
+  value = {
+    monitoring_enabled     = var.enable_monitoring
+    scaling_enabled        = var.enable_scaling_plans && local.should_enable_scaling
+    cost_alerts_enabled    = var.enable_cost_alerts
+    dashboard_enabled      = var.enable_dashboards
+    retention_days         = var.enable_monitoring ? var.monitoring_retention_days : null
+    scaling_schedules      = var.enable_scaling_plans && local.should_enable_scaling ? length(local.scaling_schedules) : 0
+    deployment_type        = var.deployment_type
+    environment            = var.environment
+    resource_group         = azurerm_resource_group.avd.name
+  }
+}
+
+output "quick_links" {
+  description = "Quick access links for monitoring and management"
+  value = {
+    workspace_url          = "https://rdweb.wvd.microsoft.com/arm/webclient/index.html"
+    azure_portal_host_pool = "https://portal.azure.com/#@/resource${azurerm_virtual_desktop_host_pool.avd.id}"
+    log_analytics          = var.enable_monitoring ? "https://portal.azure.com/#@/resource${azurerm_log_analytics_workspace.avd_monitoring[0].id}" : null
+    dashboard              = var.enable_dashboards ? "https://portal.azure.com/#@/resource${azurerm_portal_dashboard.avd_insights[0].id}" : null
+    scaling_plan           = var.enable_scaling_plans && local.should_enable_scaling ? "https://portal.azure.com/#@/resource${azurerm_virtual_desktop_scaling_plan.avd[0].id}" : null
+  }
+}

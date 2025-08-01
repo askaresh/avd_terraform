@@ -109,7 +109,7 @@ locals {
 resource "azurerm_resource_group" "avd" {
   name     = format("rg-%s-%s", var.prefix, var.environment)
   location = var.location
-  tags     = local.tags
+  tags     = local.enhanced_tags
 }
 
 /*
@@ -482,4 +482,360 @@ resource "azurerm_virtual_machine_extension" "aadlogin" {
   settings = jsonencode({
     mdmId = ""
   })
+}
+
+# =============================================================================
+# MONITORING AND SCALING FEATURES
+# =============================================================================
+
+/*
+ * Log Analytics Workspace for Monitoring
+ *
+ * Creates a Log Analytics workspace to collect logs and metrics from AVD
+ * resources. This enables comprehensive monitoring and troubleshooting.
+ */
+resource "azurerm_log_analytics_workspace" "avd_monitoring" {
+  count               = var.enable_monitoring ? 1 : 0
+  name                = "law-${var.prefix}-${var.environment}"
+  location            = azurerm_resource_group.avd.location
+  resource_group_name = azurerm_resource_group.avd.name
+  sku                 = "PerGB2018"
+  retention_in_days   = var.monitoring_retention_days
+  tags                = local.tags
+}
+
+/*
+ * Default Scaling Schedules
+ *
+ * Predefined scaling schedules optimized for different environments.
+ * Development environments scale down more aggressively for cost savings.
+ */
+locals {
+  default_scaling_schedules = {
+    dev = [
+      {
+        name                                 = "Weekdays"
+        days_of_week                        = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+        ramp_up_start_time                  = "08:00"
+        ramp_up_load_balancing_algorithm    = "BreadthFirst"
+        ramp_up_minimum_hosts_percent       = 20
+        ramp_up_capacity_threshold_percent  = 80
+        peak_start_time                     = "09:00"
+        peak_load_balancing_algorithm       = "BreadthFirst"
+        peak_minimum_hosts_percent          = 50
+        ramp_down_start_time                = "17:00"
+        ramp_down_load_balancing_algorithm  = "BreadthFirst"
+        ramp_down_minimum_hosts_percent     = 20
+        ramp_down_capacity_threshold_percent = 20
+        off_peak_start_time                 = "18:00"
+        off_peak_load_balancing_algorithm   = "BreadthFirst"
+      },
+      {
+        name                                 = "Weekends"
+        days_of_week                        = ["Saturday", "Sunday"]
+        ramp_up_start_time                  = "09:00"
+        ramp_up_load_balancing_algorithm    = "BreadthFirst"
+        ramp_up_minimum_hosts_percent       = 10
+        ramp_up_capacity_threshold_percent  = 80
+        peak_start_time                     = "10:00"
+        peak_load_balancing_algorithm       = "BreadthFirst"
+        peak_minimum_hosts_percent          = 20
+        ramp_down_start_time                = "16:00"
+        ramp_down_load_balancing_algorithm  = "BreadthFirst"
+        ramp_down_minimum_hosts_percent     = 10
+        ramp_down_capacity_threshold_percent = 20
+        off_peak_start_time                 = "17:00"
+        off_peak_load_balancing_algorithm   = "BreadthFirst"
+      }
+    ]
+    prod = [
+      {
+        name                                 = "Weekdays"
+        days_of_week                        = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+        ramp_up_start_time                  = "07:00"
+        ramp_up_load_balancing_algorithm    = "BreadthFirst"
+        ramp_up_minimum_hosts_percent       = 30
+        ramp_up_capacity_threshold_percent  = 80
+        peak_start_time                     = "08:00"
+        peak_load_balancing_algorithm       = "BreadthFirst"
+        peak_minimum_hosts_percent          = 70
+        ramp_down_start_time                = "18:00"
+        ramp_down_load_balancing_algorithm  = "BreadthFirst"
+        ramp_down_minimum_hosts_percent     = 30
+        ramp_down_capacity_threshold_percent = 20
+        off_peak_start_time                 = "19:00"
+        off_peak_load_balancing_algorithm   = "BreadthFirst"
+      },
+      {
+        name                                 = "Weekends"
+        days_of_week                        = ["Saturday", "Sunday"]
+        ramp_up_start_time                  = "08:00"
+        ramp_up_load_balancing_algorithm    = "BreadthFirst"
+        ramp_up_minimum_hosts_percent       = 20
+        ramp_up_capacity_threshold_percent  = 80
+        peak_start_time                     = "09:00"
+        peak_load_balancing_algorithm       = "BreadthFirst"
+        peak_minimum_hosts_percent          = 40
+        ramp_down_start_time                = "17:00"
+        ramp_down_load_balancing_algorithm  = "BreadthFirst"
+        ramp_down_minimum_hosts_percent     = 20
+        ramp_down_capacity_threshold_percent = 20
+        off_peak_start_time                 = "18:00"
+        off_peak_load_balancing_algorithm   = "BreadthFirst"
+      }
+    ]
+  }
+
+  # Use custom schedules if provided, otherwise use default based on environment
+  scaling_schedules = length(var.scaling_plan_schedules) > 0 ? var.scaling_plan_schedules : tolist(local.default_scaling_schedules[var.environment])
+
+  # Only enable scaling for pooled deployments
+  should_enable_scaling = var.enable_scaling_plans && (var.deployment_type == "pooled_desktop" || var.deployment_type == "pooled_remoteapp")
+}
+
+/*
+ * AVD Scaling Plan
+ *
+ * Automatically scales session hosts based on usage patterns and schedules.
+ * Only enabled for pooled deployments to optimize costs while maintaining performance.
+ */
+resource "azurerm_virtual_desktop_scaling_plan" "avd" {
+  count               = local.should_enable_scaling ? 1 : 0
+  name                = "scaling-${var.prefix}-${var.environment}"
+  location            = azurerm_resource_group.avd.location
+  resource_group_name = azurerm_resource_group.avd.name
+  friendly_name       = "${var.prefix}-${var.environment} Scaling Plan"
+  description         = "Automatic scaling plan for ${var.environment} AVD environment"
+  time_zone           = "Australia/Melbourne"
+  tags                = local.tags
+
+  host_pool {
+    hostpool_id          = azurerm_virtual_desktop_host_pool.avd.id
+    scaling_plan_enabled = true
+  }
+
+  dynamic "schedule" {
+    for_each = local.scaling_schedules
+    content {
+      name                                 = schedule.value.name
+      days_of_week                        = schedule.value.days_of_week
+      ramp_up_start_time                  = schedule.value.ramp_up_start_time
+      ramp_up_load_balancing_algorithm    = schedule.value.ramp_up_load_balancing_algorithm
+      ramp_up_minimum_hosts_percent       = schedule.value.ramp_up_minimum_hosts_percent
+      ramp_up_capacity_threshold_percent  = schedule.value.ramp_up_capacity_threshold_percent
+      peak_start_time                     = schedule.value.peak_start_time
+      peak_load_balancing_algorithm       = schedule.value.peak_load_balancing_algorithm
+      ramp_down_start_time                = schedule.value.ramp_down_start_time
+      ramp_down_load_balancing_algorithm  = schedule.value.ramp_down_load_balancing_algorithm
+      ramp_down_minimum_hosts_percent     = schedule.value.ramp_down_minimum_hosts_percent
+      ramp_down_capacity_threshold_percent = schedule.value.ramp_down_capacity_threshold_percent
+      ramp_down_force_logoff_users        = false
+      ramp_down_stop_hosts_when           = "ZeroSessions"
+      ramp_down_wait_time_minutes         = 30
+      ramp_down_notification_message      = "This session host will be shut down in 30 minutes due to scaling plan."
+      off_peak_start_time                 = schedule.value.off_peak_start_time
+      off_peak_load_balancing_algorithm   = schedule.value.off_peak_load_balancing_algorithm
+    }
+  }
+
+  depends_on = [
+    azurerm_role_assignment.scaling_plan
+  ]
+}
+
+/*
+ * Role Assignment for AVD Scaling Plan
+ *
+ * Assigns the Desktop Virtualization Contributor role to the AVD service
+ * principal to allow scaling plan operations on the host pool.
+ */
+data "azurerm_role_definition" "desktop_virtualization_contributor" {
+  name = "Desktop Virtualization Contributor"
+}
+
+/*
+ * Role Assignment for AVD Scaling Plan
+ *
+ * Assigns the Desktop Virtualization Contributor role to the AVD service
+ * principal to allow scaling plan operations on the host pool.
+ */
+resource "azurerm_role_assignment" "scaling_plan" {
+  count              = local.should_enable_scaling ? 1 : 0
+  scope              = azurerm_virtual_desktop_host_pool.avd.id
+  role_definition_id = data.azurerm_role_definition.desktop_virtualization_contributor.id
+  principal_id       = "9cdead84-a844-4324-93f2-b2e6bb768d07"  # AVD Service Principal
+  principal_type     = "ServicePrincipal"
+}
+
+/*
+ * Diagnostic Settings for Host Pool
+ *
+ * Sends AVD host pool logs to Log Analytics workspace for monitoring
+ * and troubleshooting. Only enabled when monitoring is enabled.
+ */
+resource "azurerm_monitor_diagnostic_setting" "avd_host_pool" {
+  count                      = var.enable_monitoring ? 1 : 0
+  name                       = "diag-${azurerm_virtual_desktop_host_pool.avd.name}"
+  target_resource_id         = azurerm_virtual_desktop_host_pool.avd.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.avd_monitoring[0].id
+
+  enabled_log {
+    category = "Checkpoint"
+  }
+
+  enabled_log {
+    category = "Error"
+  }
+
+  enabled_log {
+    category = "Management"
+  }
+
+  enabled_log {
+    category = "Connection"
+  }
+
+  enabled_log {
+    category = "HostRegistration"
+  }
+}
+
+/*
+ * Diagnostic Settings for Session Hosts
+ *
+ * Sends VM logs and metrics to Log Analytics workspace for monitoring.
+ * Only enabled when monitoring is enabled.
+ */
+resource "azurerm_monitor_diagnostic_setting" "session_hosts" {
+  count                      = var.enable_monitoring ? var.session_host_count : 0
+  name                       = "diag-${azurerm_windows_virtual_machine.session_host[count.index].name}"
+  target_resource_id         = azurerm_windows_virtual_machine.session_host[count.index].id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.avd_monitoring[0].id
+
+  metric {
+    category = "AllMetrics"
+    enabled  = true
+  }
+}
+
+/*
+ * Action Group for Cost Alerts
+ *
+ * Defines the action to be taken when cost alerts are triggered.
+ * Sends email notifications to the specified recipients.
+ */
+resource "azurerm_monitor_action_group" "cost_alerts" {
+  count               = var.enable_cost_alerts ? 1 : 0
+  name                = "ag-cost-${var.prefix}-${var.environment}"
+  resource_group_name = azurerm_resource_group.avd.name
+  short_name          = "cost-alerts"
+  tags                = local.tags
+
+  email_receiver {
+    name                    = "cost-admin"
+    email_address          = "admin@${var.prefix}.com"
+    use_common_alert_schema = true
+  }
+}
+
+/*
+ * Consumption Budget for Cost Monitoring
+ *
+ * Sets up budget alerts to monitor AVD resource consumption costs.
+ * Alerts are triggered when daily spending exceeds the threshold.
+ */
+resource "azurerm_consumption_budget_resource_group" "avd_budget" {
+  count           = var.enable_cost_alerts ? 1 : 0
+  name            = "budget-${var.prefix}-${var.environment}"
+  resource_group_id = azurerm_resource_group.avd.id
+
+  amount     = var.cost_alert_threshold
+  time_grain = "Monthly"
+
+  time_period {
+    start_date = "2025-08-01T00:00:00Z"
+    end_date   = "2025-12-31T23:59:59Z"
+  }
+
+  notification {
+    enabled        = true
+    threshold      = 90.0
+    operator       = "GreaterThan"
+    contact_emails = ["admin@${var.prefix}.com"]
+    contact_groups = [azurerm_monitor_action_group.cost_alerts[0].id]
+  }
+
+  notification {
+    enabled        = true
+    threshold      = 100.0
+    operator       = "GreaterThan"
+    contact_emails = ["admin@${var.prefix}.com"]
+    contact_groups = [azurerm_monitor_action_group.cost_alerts[0].id]
+  }
+}
+
+/*
+ * Custom Dashboard for AVD Insights
+ *
+ * Creates a comprehensive dashboard showing key AVD metrics
+ * including session counts, performance, and cost data.
+ */
+resource "azurerm_portal_dashboard" "avd_insights" {
+  count               = var.enable_dashboards ? 1 : 0
+  name                = "dashboard-${var.prefix}-${var.environment}"
+  resource_group_name = azurerm_resource_group.avd.name
+  location            = azurerm_resource_group.avd.location
+  tags                = local.tags
+
+  dashboard_properties = templatefile("${path.module}/templates/dashboard.tpl", {
+    workspace_id     = var.enable_monitoring ? azurerm_log_analytics_workspace.avd_monitoring[0].id : ""
+    host_pool_id     = azurerm_virtual_desktop_host_pool.avd.id
+    resource_group   = azurerm_resource_group.avd.name
+    environment      = var.environment
+    deployment_type  = var.deployment_type
+    refresh_interval = var.dashboard_refresh_interval
+  })
+}
+
+/*
+ * Auto-Shutdown Policy for Cost Optimization
+ *
+ * Automatically shuts down session hosts during off-hours to save costs.
+ * This is particularly useful for development environments.
+ */
+resource "azurerm_dev_test_global_vm_shutdown_schedule" "session_hosts" {
+  count              = var.enable_cost_alerts ? var.session_host_count : 0
+  virtual_machine_id = azurerm_windows_virtual_machine.session_host[count.index].id
+  location           = azurerm_resource_group.avd.location
+  enabled            = true
+
+  daily_recurrence_time = "1800"
+  timezone             = "AUS Eastern Standard Time"
+
+  notification_settings {
+    enabled         = false
+    time_in_minutes = 30
+    webhook_url     = ""
+  }
+}
+
+/*
+ * Cost Management Tags
+ *
+ * Adds cost management tags to help with cost allocation and tracking.
+ */
+locals {
+  cost_management_tags = {
+    cost_center     = "IT-AVD"
+    environment     = var.environment
+    workload        = "azure-virtual-desktop"
+    auto_shutdown   = var.enable_cost_alerts ? "enabled" : "disabled"
+    scaling_enabled = var.enable_scaling_plans ? "enabled" : "disabled"
+    monitoring      = var.enable_monitoring ? "enabled" : "disabled"
+    created_by      = "terraform"
+    created_date    = formatdate("YYYY-MM-DD", timestamp())
+  }
+  
+  # Merge cost management tags with existing tags
+  enhanced_tags = merge(local.tags, local.cost_management_tags)
 }
