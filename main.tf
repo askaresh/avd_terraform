@@ -522,11 +522,14 @@ locals {
         ramp_up_capacity_threshold_percent  = 80
         peak_start_time                     = "09:00"
         peak_load_balancing_algorithm       = "BreadthFirst"
-        peak_minimum_hosts_percent          = 50
         ramp_down_start_time                = "17:00"
         ramp_down_load_balancing_algorithm  = "BreadthFirst"
         ramp_down_minimum_hosts_percent     = 20
         ramp_down_capacity_threshold_percent = 20
+        ramp_down_force_logoff_users        = false
+        ramp_down_stop_hosts_when           = "ZeroSessions"
+        ramp_down_wait_time_minutes         = 30
+        ramp_down_notification_message      = "You will be logged off in 30 minutes due to scaling plan. Please save your work."
         off_peak_start_time                 = "18:00"
         off_peak_load_balancing_algorithm   = "BreadthFirst"
       },
@@ -539,11 +542,14 @@ locals {
         ramp_up_capacity_threshold_percent  = 80
         peak_start_time                     = "10:00"
         peak_load_balancing_algorithm       = "BreadthFirst"
-        peak_minimum_hosts_percent          = 20
         ramp_down_start_time                = "16:00"
         ramp_down_load_balancing_algorithm  = "BreadthFirst"
         ramp_down_minimum_hosts_percent     = 10
         ramp_down_capacity_threshold_percent = 20
+        ramp_down_force_logoff_users        = false
+        ramp_down_stop_hosts_when           = "ZeroSessions"
+        ramp_down_wait_time_minutes         = 30
+        ramp_down_notification_message      = "You will be logged off in 30 minutes due to scaling plan. Please save your work."
         off_peak_start_time                 = "17:00"
         off_peak_load_balancing_algorithm   = "BreadthFirst"
       }
@@ -558,11 +564,14 @@ locals {
         ramp_up_capacity_threshold_percent  = 80
         peak_start_time                     = "08:00"
         peak_load_balancing_algorithm       = "BreadthFirst"
-        peak_minimum_hosts_percent          = 70
         ramp_down_start_time                = "18:00"
         ramp_down_load_balancing_algorithm  = "BreadthFirst"
         ramp_down_minimum_hosts_percent     = 30
         ramp_down_capacity_threshold_percent = 20
+        ramp_down_force_logoff_users        = false
+        ramp_down_stop_hosts_when           = "ZeroSessions"
+        ramp_down_wait_time_minutes         = 30
+        ramp_down_notification_message      = "You will be logged off in 30 minutes due to scaling plan. Please save your work."
         off_peak_start_time                 = "19:00"
         off_peak_load_balancing_algorithm   = "BreadthFirst"
       },
@@ -575,11 +584,14 @@ locals {
         ramp_up_capacity_threshold_percent  = 80
         peak_start_time                     = "09:00"
         peak_load_balancing_algorithm       = "BreadthFirst"
-        peak_minimum_hosts_percent          = 40
         ramp_down_start_time                = "17:00"
         ramp_down_load_balancing_algorithm  = "BreadthFirst"
         ramp_down_minimum_hosts_percent     = 20
         ramp_down_capacity_threshold_percent = 20
+        ramp_down_force_logoff_users        = false
+        ramp_down_stop_hosts_when           = "ZeroSessions"
+        ramp_down_wait_time_minutes         = 30
+        ramp_down_notification_message      = "You will be logged off in 30 minutes due to scaling plan. Please save your work."
         off_peak_start_time                 = "18:00"
         off_peak_load_balancing_algorithm   = "BreadthFirst"
       }
@@ -629,10 +641,10 @@ resource "azurerm_virtual_desktop_scaling_plan" "avd" {
       ramp_down_load_balancing_algorithm  = schedule.value.ramp_down_load_balancing_algorithm
       ramp_down_minimum_hosts_percent     = schedule.value.ramp_down_minimum_hosts_percent
       ramp_down_capacity_threshold_percent = schedule.value.ramp_down_capacity_threshold_percent
-      ramp_down_force_logoff_users        = false
-      ramp_down_stop_hosts_when           = "ZeroSessions"
-      ramp_down_wait_time_minutes         = 30
-      ramp_down_notification_message      = "This session host will be shut down in 30 minutes due to scaling plan."
+      ramp_down_force_logoff_users        = schedule.value.ramp_down_force_logoff_users
+      ramp_down_stop_hosts_when           = schedule.value.ramp_down_stop_hosts_when
+      ramp_down_wait_time_minutes         = schedule.value.ramp_down_wait_time_minutes
+      ramp_down_notification_message      = schedule.value.ramp_down_notification_message
       off_peak_start_time                 = schedule.value.off_peak_start_time
       off_peak_load_balancing_algorithm   = schedule.value.off_peak_load_balancing_algorithm
     }
@@ -644,27 +656,70 @@ resource "azurerm_virtual_desktop_scaling_plan" "avd" {
 }
 
 /*
- * Role Assignment for AVD Scaling Plan
+ * Custom Role Definition for AVD Scaling Plan
  *
- * Assigns the Desktop Virtualization Contributor role to the AVD service
- * principal to allow scaling plan operations on the host pool.
+ * Creates a custom role with specific permissions for AVD scaling operations.
+ * This is more secure than using the broad "Desktop Virtualization Contributor" role.
  */
-data "azurerm_role_definition" "desktop_virtualization_contributor" {
-  name = "Desktop Virtualization Contributor"
+resource "azurerm_role_definition" "avd_scaling" {
+  count       = local.should_enable_scaling ? 1 : 0
+  name        = "AVD-Scaling-${var.prefix}-${var.environment}"
+  scope       = azurerm_resource_group.avd.id
+  description = "Custom role for AVD scaling plan operations"
+
+  permissions {
+    actions = [
+      # VM management permissions
+      "Microsoft.Compute/virtualMachines/deallocate/action",
+      "Microsoft.Compute/virtualMachines/restart/action",
+      "Microsoft.Compute/virtualMachines/powerOff/action",
+      "Microsoft.Compute/virtualMachines/start/action",
+      "Microsoft.Compute/virtualMachines/read",
+      
+      # AVD host pool permissions
+      "Microsoft.DesktopVirtualization/hostpools/read",
+      "Microsoft.DesktopVirtualization/hostpools/write",
+      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/read",
+      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/write",
+      
+      # Session management permissions
+      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/usersessions/delete",
+      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/usersessions/read",
+      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/usersessions/sendMessage/action",
+      
+      # Monitoring permissions
+      "Microsoft.Insights/eventtypes/values/read"
+    ]
+    not_actions = []
+  }
+
+  assignable_scopes = [
+    azurerm_resource_group.avd.id,
+  ]
+}
+
+/*
+ * Fetch the Azure AD Service Principal for Windows Virtual Desktop
+ *
+ * Dynamically retrieves the AVD service principal instead of hardcoding the ID.
+ */
+data "azuread_service_principal" "avd" {
+  count        = local.should_enable_scaling ? 1 : 0
+  display_name = "Azure Virtual Desktop"
 }
 
 /*
  * Role Assignment for AVD Scaling Plan
  *
- * Assigns the Desktop Virtualization Contributor role to the AVD service
- * principal to allow scaling plan operations on the host pool.
+ * Assigns the custom role to the AVD service principal for scaling plan operations.
  */
 resource "azurerm_role_assignment" "scaling_plan" {
-  count              = local.should_enable_scaling ? 1 : 0
-  scope              = azurerm_virtual_desktop_host_pool.avd.id
-  role_definition_id = data.azurerm_role_definition.desktop_virtualization_contributor.id
-  principal_id       = "9cdead84-a844-4324-93f2-b2e6bb768d07"  # AVD Service Principal
-  principal_type     = "ServicePrincipal"
+  count                        = local.should_enable_scaling ? 1 : 0
+  name                         = azurerm_role_definition.avd_scaling[0].role_definition_resource_id
+  scope                        = azurerm_resource_group.avd.id
+  role_definition_id           = azurerm_role_definition.avd_scaling[0].role_definition_resource_id
+  principal_id                 = data.azuread_service_principal.avd[0].id
+  skip_service_principal_aad_check = true
 }
 
 /*

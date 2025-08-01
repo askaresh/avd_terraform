@@ -153,6 +153,16 @@ output "scaling_schedules" {
   value       = var.enable_scaling_plans && local.should_enable_scaling ? local.scaling_schedules : []
 }
 
+output "scaling_plan_role_id" {
+  description = "The ID of the custom scaling plan role"
+  value       = var.enable_scaling_plans && local.should_enable_scaling ? azurerm_role_definition.avd_scaling[0].id : null
+}
+
+output "scaling_plan_role_name" {
+  description = "The name of the custom scaling plan role"
+  value       = var.enable_scaling_plans && local.should_enable_scaling ? azurerm_role_definition.avd_scaling[0].name : null
+}
+
 output "cost_alerts_enabled" {
   description = "Whether cost monitoring alerts are enabled"
   value       = var.enable_cost_alerts
@@ -187,6 +197,7 @@ output "monitoring_insights" {
     dashboard_enabled      = var.enable_dashboards
     retention_days         = var.enable_monitoring ? var.monitoring_retention_days : null
     scaling_schedules      = var.enable_scaling_plans && local.should_enable_scaling ? length(local.scaling_schedules) : 0
+    scaling_role_type      = var.enable_scaling_plans && local.should_enable_scaling ? "custom" : null
     deployment_type        = var.deployment_type
     environment            = var.environment
     resource_group         = azurerm_resource_group.avd.name

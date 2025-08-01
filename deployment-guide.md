@@ -49,6 +49,7 @@ All resources follow [**Microsoft Cloud Adoption Framework**](https://learn.micr
 |-------------|----------------|------|----------|----------|
 | **Development** | Pooled Desktop + Monitoring | `dev-pooled-desktop-with-monitoring.auto.tfvars` | Monitoring, Scaling, Dashboards | Development with cost optimization |
 | **Production** | Pooled RemoteApp + Monitoring | `prod-pooled-remoteapp-with-monitoring.auto.tfvars` | Monitoring, Scaling, Dashboards | Production apps with insights |
+| **Development** | Pooled Desktop + Enhanced Scaling | `dev-pooled-desktop-enhanced-scaling.auto.tfvars` | **NEW**: Custom roles, Advanced schedules, User notifications | Advanced development with enhanced scaling control |
 
 ## Authentication Setup
 
@@ -126,6 +127,14 @@ Write-Host "`nReady for Terraform deployment!" -ForegroundColor Green
 - **`enable_dashboards`** - Set to `true` for custom insights dashboards
 - **`monitoring_retention_days`** - Choose retention period (30, 60, 90, 120, 180, 365, 730 days)
 - **`cost_alert_threshold`** - Set daily cost threshold for alerts
+
+#### For Enhanced Scaling Deployments (`*enhanced-scaling*` files):
+- **`scaling_plan_schedules`** - Custom schedule configuration with advanced parameters
+- **`ramp_down_notification_message`** - Custom user notification messages
+- **`ramp_down_wait_time_minutes`** - Configurable wait time before session termination
+- **`ramp_down_force_logoff_users`** - Control whether to force logoff users
+- **`ramp_down_stop_hosts_when`** - Choose when to stop hosts ("ZeroSessions", "ZeroActiveSessions")
+- **Custom Role Definition** - Automatically creates precise permissions for scaling operations
 
 ### 3. Optional Customizations
 

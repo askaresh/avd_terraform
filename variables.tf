@@ -166,7 +166,7 @@ variable "enable_scaling_plans" {
 }
 
 variable "scaling_plan_schedules" {
-  description = "Custom scaling schedules for different environments. If not provided, default schedules will be used based on environment."
+  description = "Custom scaling schedules for AVD host pool. If empty, uses default schedules based on environment."
   type = list(object({
     name                                 = string
     days_of_week                        = list(string)
@@ -176,23 +176,18 @@ variable "scaling_plan_schedules" {
     ramp_up_capacity_threshold_percent  = number
     peak_start_time                     = string
     peak_load_balancing_algorithm       = string
-    peak_minimum_hosts_percent          = number
     ramp_down_start_time                = string
     ramp_down_load_balancing_algorithm  = string
     ramp_down_minimum_hosts_percent     = number
     ramp_down_capacity_threshold_percent = number
+    ramp_down_force_logoff_users        = bool
+    ramp_down_stop_hosts_when           = string
+    ramp_down_wait_time_minutes         = number
+    ramp_down_notification_message      = string
     off_peak_start_time                 = string
     off_peak_load_balancing_algorithm   = string
   }))
   default = []
-  
-  validation {
-    condition = alltrue([
-      for schedule in var.scaling_plan_schedules : 
-      contains(["BreadthFirst", "DepthFirst"], schedule.ramp_up_load_balancing_algorithm)
-    ])
-    error_message = "Load balancing algorithm must be BreadthFirst or DepthFirst"
-  }
 }
 
 # =============================================================================
