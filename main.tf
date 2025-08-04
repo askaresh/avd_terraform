@@ -606,9 +606,10 @@ locals {
 }
 
 /*
- * AVD Scaling Plan
+ * AVD Scaling Plan (Azure Verified Module Approach)
  *
  * Automatically scales session hosts based on usage patterns and schedules.
+ * Uses inline host_pool block as recommended by Azure Verified Module.
  * Only enabled for pooled deployments to optimize costs while maintaining performance.
  */
 resource "azurerm_virtual_desktop_scaling_plan" "avd" {
@@ -620,6 +621,8 @@ resource "azurerm_virtual_desktop_scaling_plan" "avd" {
   description         = "Automatic scaling plan for ${var.environment} AVD environment"
   time_zone           = "Australia/Melbourne"
   tags                = local.tags
+
+  # Host pool association will be handled separately for better Azure Portal compatibility
 
   dynamic "schedule" {
     for_each = local.scaling_schedules
@@ -646,16 +649,18 @@ resource "azurerm_virtual_desktop_scaling_plan" "avd" {
   }
 
   depends_on = [
-    azurerm_role_assignment.scaling_plan
+    azurerm_role_assignment.scaling_plan,
+    azurerm_virtual_desktop_host_pool.avd,
+    azurerm_windows_virtual_machine.session_host
   ]
 }
 
 /*
- * Scaling Plan Host Pool Association
+ * Scaling Plan Host Pool Association (Separate Resource - Best Practice from Sample 2)
  *
- * Associates the scaling plan with the host pool using the recommended
- * separate association resource instead of inline host_pool block.
- * This ensures proper Azure portal compatibility.
+ * Associates the scaling plan with the host pool using a separate resource
+ * instead of inline host_pool block. This ensures better Azure Portal compatibility
+ * and resolves the 404 error in the scaling plan overview blade.
  */
 resource "azurerm_virtual_desktop_scaling_plan_host_pool_association" "avd" {
   count           = local.should_enable_scaling ? 1 : 0
@@ -664,74 +669,70 @@ resource "azurerm_virtual_desktop_scaling_plan_host_pool_association" "avd" {
   enabled         = true
 
   depends_on = [
+    azurerm_virtual_desktop_scaling_plan.avd,
     azurerm_role_assignment.scaling_plan
   ]
 }
 
 /*
- * Custom Role Definition for AVD Scaling Plan
+ * Get Current Subscription (Required for Role Assignment Scope)
  *
- * Creates a custom role with specific permissions for AVD scaling operations.
- * This is more secure than using the broad "Desktop Virtualization Contributor" role.
+ * Retrieves the current subscription details for use in role assignments.
+ * This follows the pattern from Sample 2 for proper scope management.
  */
-resource "azurerm_role_definition" "avd_scaling" {
-  count       = local.should_enable_scaling ? 1 : 0
-  name        = "AVD-Scaling-${var.prefix}-${var.environment}"
-  scope       = azurerm_resource_group.avd.id
-  description = "Custom role for AVD scaling plan operations"
+data "azurerm_subscription" "current" {}
 
-  permissions {
-    actions = [
-      # VM management permissions
-      "Microsoft.Compute/virtualMachines/deallocate/action",
-      "Microsoft.Compute/virtualMachines/restart/action",
-      "Microsoft.Compute/virtualMachines/powerOff/action",
-      "Microsoft.Compute/virtualMachines/start/action",
-      "Microsoft.Compute/virtualMachines/read",
-      
-      # AVD host pool permissions
-      "Microsoft.DesktopVirtualization/hostpools/read",
-      "Microsoft.DesktopVirtualization/hostpools/write",
-      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/read",
-      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/write",
-      
-      # Session management permissions
-      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/usersessions/delete",
-      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/usersessions/read",
-      "Microsoft.DesktopVirtualization/hostpools/sessionhosts/usersessions/sendMessage/action",
-      
-      # Monitoring permissions
-      "Microsoft.Insights/eventtypes/values/read"
-    ]
-    not_actions = []
-  }
-
-  assignable_scopes = [
-    azurerm_resource_group.avd.id,
-  ]
+/*
+ * Random UUID for Role Assignment (Best Practice from Sample 1)
+ *
+ * Generates a unique identifier for the role assignment to ensure
+ * proper resource management and avoid conflicts.
+ */
+resource "random_uuid" "scaling_plan_role" {
+  count = local.should_enable_scaling ? 1 : 0
 }
 
 /*
- * Fetch the Azure AD Service Principal for Windows Virtual Desktop
+ * Role Assignment for AVD Scaling Plan (Azure Verified Module Approach)
  *
- * Dynamically retrieves the AVD service principal instead of hardcoding the ID.
+ * Uses the built-in "Desktop Virtualization Power On Off Contributor" role
+ * and the hardcoded AVD service principal client ID for reliability.
+ * This follows the official Azure Verified Module best practices.
+ */
+data "azurerm_role_definition" "avd_power_role" {
+  count = local.should_enable_scaling ? 1 : 0
+  name  = "Desktop Virtualization Power On Off Contributor"
+}
+
+/*
+ * AVD Service Principal (Hardcoded Client ID for Reliability)
+ *
+ * Uses the official AVD service principal client ID instead of dynamic lookup.
+ * This is more reliable and follows Azure Verified Module patterns.
  */
 data "azuread_service_principal" "avd" {
-  count        = local.should_enable_scaling ? 1 : 0
-  display_name = "Azure Virtual Desktop"
+  count      = local.should_enable_scaling ? 1 : 0
+  client_id  = "9cdead84-a844-4324-93f2-b2e6bb768d07"  # Official AVD service principal
 }
 
 /*
- * Role Assignment for AVD Scaling Plan
+ * Role Assignment for AVD Scaling Plan (Enhanced from Sample 1 & 2)
  *
- * Assigns the custom role to the AVD service principal for scaling plan operations.
+ * Assigns the built-in role to the AVD service principal for scaling plan operations.
+ * Uses random UUID for name and subscription scope for better permissions.
+ * This is more maintainable than custom roles and follows Azure best practices.
  */
 resource "azurerm_role_assignment" "scaling_plan" {
   count                        = local.should_enable_scaling ? 1 : 0
-  scope                        = azurerm_resource_group.avd.id
-  role_definition_id           = azurerm_role_definition.avd_scaling[0].role_definition_resource_id
+  name                         = random_uuid.scaling_plan_role[0].result
+  scope                        = data.azurerm_subscription.current.id  # Subscription scope like Sample 2
+  role_definition_id           = data.azurerm_role_definition.avd_power_role[0].id
   principal_id                 = data.azuread_service_principal.avd[0].object_id
   skip_service_principal_aad_check = true
+
+  lifecycle {
+    ignore_changes = all  # Prevent recreation on every apply
+  }
 }
 
 /*
@@ -861,6 +862,13 @@ resource "azurerm_portal_dashboard" "avd_insights" {
     deployment_type  = var.deployment_type
     refresh_interval = var.dashboard_refresh_interval
   })
+
+  depends_on = [
+    azurerm_virtual_desktop_scaling_plan.avd,
+    azurerm_log_analytics_workspace.avd_monitoring,
+    azurerm_monitor_diagnostic_setting.avd_host_pool,
+    azurerm_monitor_diagnostic_setting.session_hosts
+  ]
 }
 
 /*
