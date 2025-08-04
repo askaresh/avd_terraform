@@ -359,7 +359,7 @@ resource "azurerm_windows_virtual_machine" "session_host" {
   size                = var.vm_size
   admin_username      = var.admin_username
   admin_password      = var.admin_password
-  computer_name       = format("avd%02d", count.index + 1)
+  computer_name       = format("avd-%s-%s-%02d", var.prefix, var.environment, count.index + 1)
   network_interface_ids = [element(azurerm_network_interface.session_host[*].id, count.index)]
   license_type        = "Windows_Client"
   tags                = local.tags
@@ -621,11 +621,6 @@ resource "azurerm_virtual_desktop_scaling_plan" "avd" {
   time_zone           = "Australia/Melbourne"
   tags                = local.tags
 
-  host_pool {
-    hostpool_id          = azurerm_virtual_desktop_host_pool.avd.id
-    scaling_plan_enabled = true
-  }
-
   dynamic "schedule" {
     for_each = local.scaling_schedules
     content {
@@ -649,6 +644,24 @@ resource "azurerm_virtual_desktop_scaling_plan" "avd" {
       off_peak_load_balancing_algorithm   = schedule.value.off_peak_load_balancing_algorithm
     }
   }
+
+  depends_on = [
+    azurerm_role_assignment.scaling_plan
+  ]
+}
+
+/*
+ * Scaling Plan Host Pool Association
+ *
+ * Associates the scaling plan with the host pool using the recommended
+ * separate association resource instead of inline host_pool block.
+ * This ensures proper Azure portal compatibility.
+ */
+resource "azurerm_virtual_desktop_scaling_plan_host_pool_association" "avd" {
+  count           = local.should_enable_scaling ? 1 : 0
+  host_pool_id    = azurerm_virtual_desktop_host_pool.avd.id
+  scaling_plan_id = azurerm_virtual_desktop_scaling_plan.avd[0].id
+  enabled         = true
 
   depends_on = [
     azurerm_role_assignment.scaling_plan
@@ -715,10 +728,9 @@ data "azuread_service_principal" "avd" {
  */
 resource "azurerm_role_assignment" "scaling_plan" {
   count                        = local.should_enable_scaling ? 1 : 0
-  name                         = azurerm_role_definition.avd_scaling[0].role_definition_resource_id
   scope                        = azurerm_resource_group.avd.id
   role_definition_id           = azurerm_role_definition.avd_scaling[0].role_definition_resource_id
-  principal_id                 = data.azuread_service_principal.avd[0].id
+  principal_id                 = data.azuread_service_principal.avd[0].object_id
   skip_service_principal_aad_check = true
 }
 
@@ -767,9 +779,8 @@ resource "azurerm_monitor_diagnostic_setting" "session_hosts" {
   target_resource_id         = azurerm_windows_virtual_machine.session_host[count.index].id
   log_analytics_workspace_id = azurerm_log_analytics_workspace.avd_monitoring[0].id
 
-  metric {
+  enabled_metric {
     category = "AllMetrics"
-    enabled  = true
   }
 }
 

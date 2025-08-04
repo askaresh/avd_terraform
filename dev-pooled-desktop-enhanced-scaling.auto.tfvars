@@ -74,26 +74,7 @@ scaling_plan_schedules = [
     off_peak_start_time                 = "17:00"
     off_peak_load_balancing_algorithm   = "BreadthFirst"
   },
-  {
-    name                                 = "Holidays"
-    days_of_week                        = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    ramp_up_start_time                  = "10:00"
-    ramp_up_load_balancing_algorithm    = "BreadthFirst"
-    ramp_up_minimum_hosts_percent       = 5
-    ramp_up_capacity_threshold_percent  = 90
-    peak_start_time                     = "11:00"
-    peak_load_balancing_algorithm       = "BreadthFirst"
-    ramp_down_start_time                = "15:00"
-    ramp_down_load_balancing_algorithm  = "BreadthFirst"
-    ramp_down_minimum_hosts_percent     = 5
-    ramp_down_capacity_threshold_percent = 10
-    ramp_down_force_logoff_users        = false
-    ramp_down_stop_hosts_when           = "ZeroSessions"
-    ramp_down_wait_time_minutes         = 20
-    ramp_down_notification_message      = "Your session will be logged off in 20 minutes due to holiday scaling plan."
-    off_peak_start_time                 = "16:00"
-    off_peak_load_balancing_algorithm   = "BreadthFirst"
-  }
+
 ]
 
 # Enable cost monitoring alerts
@@ -102,7 +83,7 @@ cost_alert_threshold = 150  # Higher threshold for enhanced features
 
 # Enable custom dashboards for insights
 enable_dashboards = true
-dashboard_refresh_interval = 10  # More frequent refresh for enhanced monitoring
+dashboard_refresh_interval = 15  # More frequent refresh for enhanced monitoring
 
 # Security principals for development team access
 # REQUIRED: Replace with actual Azure AD object IDs
