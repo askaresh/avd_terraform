@@ -820,8 +820,11 @@ resource "azurerm_consumption_budget_resource_group" "avd_budget" {
   time_grain = "Monthly"
 
   time_period {
-    start_date = "2025-08-01T00:00:00Z"
-    end_date   = "2025-12-31T23:59:59Z"
+    # Set start date to first day of current month dynamically
+    # Format: YYYY-MM-01T00:00:00Z
+    start_date = "${substr(timestamp(), 0, 7)}-01T00:00:00Z"
+    # Set end date to end of next year
+    end_date   = "${tonumber(substr(timestamp(), 0, 4)) + 1}-12-31T23:59:59Z"
   }
 
   notification {
