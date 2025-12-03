@@ -266,7 +266,7 @@ The configuration is broken into logical files:
 
 | File              | Purpose |
 | ----------------- | ------- |
-| `providers.tf`    | Specifies the required provider versions and configures the AzureRM provider. |
+| `providers.tf`    | Specifies the required provider versions and configures AzureRM, AzureAD, Random, and AzAPI providers. |
 | `variables.tf`    | Declares all variables that can be customised for an environment. Most defaults come from the supplied ARM template. |
 | `main.tf`         | Contains resource definitions for the resource group, network, host pool, application group, workspace, role assignments, NICs, virtual machines, VM extensions, monitoring, scaling, and dashboards. |
 | `outputs.tf`      | Exposes key information about the deployment (resource group, host pool name, monitoring insights, etc.). |
@@ -279,8 +279,11 @@ guidance.
 
 ## Prerequisites
 
-* [Terraform 1.2 or later](https://www.terraform.io/downloads.html) and the
-  [`azurerm` provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest).
+* [Terraform 1.2 or later](https://www.terraform.io/downloads.html) and the required providers:
+  * [`azurerm` provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest)
+  * [`azuread` provider](https://registry.terraform.io/providers/hashicorp/azuread/latest)
+  * [`random` provider](https://registry.terraform.io/providers/hashicorp/random/latest)
+  * [`azapi` provider](https://registry.terraform.io/providers/azure/azapi/latest) - Required for session host cleanup operations
 * An Azure subscription with the [Virtual Desktop](https://learn.microsoft.com/en-us/azure/virtual-desktop/) service enabled.
 * Object IDs for users, groups or service principals that require access to the
   published desktops. These IDs are supplied via the `security_principal_object_ids`
@@ -531,6 +534,22 @@ terraform destroy -var-file=dev.auto.tfvars
 ```
 
 You will be prompted to confirm the destruction. Destroying the resources will remove the host pool, session hosts, network and resource group.
+
+**Important**: If VMs are stopped (due to scaling plans or auto-shutdown), you may encounter extension deletion errors. To avoid this:
+
+1. **Start VMs before destroy** (recommended):
+   ```bash
+   az vm start --ids $(az vm list -g rg-avd-dev --query "[].id" -o tsv)
+   terraform destroy -var-file=dev.auto.tfvars
+   ```
+
+2. **Or delete the resource group directly**:
+   ```bash
+   az group delete --name rg-avd-dev --yes --no-wait
+   ```
+   This automatically cleans up all resources including extensions.
+
+See the [deployment guide](deployment-guide.md#vm-extension-deletion-errors-vm-stopped) for detailed troubleshooting steps.
 
 ## Key Variables
 

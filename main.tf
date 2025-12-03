@@ -422,7 +422,11 @@ resource "azurerm_virtual_machine_extension" "guest_attestation" {
     }
   })
   depends_on = [azurerm_windows_virtual_machine.session_host]
+  
   lifecycle {
+    # Note: Extensions cannot be deleted when VMs are stopped.
+    # If destroy fails with "Cannot modify extensions" error, see deployment-guide.md
+    # for solutions (start VMs first or remove from state).
     create_before_destroy = false
   }
 }
@@ -464,7 +468,11 @@ PROTECTED_SETTINGS
   depends_on = [
     azurerm_virtual_desktop_host_pool_registration_info.avd
   ]
+  
   lifecycle {
+    # Note: Extensions cannot be deleted when VMs are stopped.
+    # If destroy fails with "Cannot modify extensions" error, see deployment-guide.md
+    # for solutions (start VMs first or remove from state).
     create_before_destroy = false
   }
 }
@@ -488,8 +496,11 @@ resource "azurerm_virtual_machine_extension" "aadlogin" {
   settings = jsonencode({
     mdmId = ""
   })
-
+  
   lifecycle {
+    # Note: Extensions cannot be deleted when VMs are stopped.
+    # If destroy fails with "Cannot modify extensions" error, see deployment-guide.md
+    # for solutions (start VMs first or remove from state).
     create_before_destroy = false
   }
 }

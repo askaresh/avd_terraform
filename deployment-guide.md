@@ -698,9 +698,51 @@ az group delete --name rg-avd-dev --force-deletion-types Microsoft.Compute/virtu
 
 **Note**: The phantom session host issue is a known Azure AVD backend problem where VM deletion doesn't always clean up session host registrations immediately.
 
+### VM Extension Deletion Errors (VM Stopped)
+
+If `terraform destroy` fails with extension deletion errors when VMs are stopped:
+
+```powershell
+# Error message:
+# "Cannot modify extensions in the VM when the VM is not running"
+# "OperationNotAllowed: Cannot modify extensions in the VM when the VM is not running"
+
+# Solution 1: Start VMs before destroy (Recommended)
+az vm start --ids $(az vm list -g rg-avd-dev --query "[].id" -o tsv)
+Start-Sleep -Seconds 30  # Wait for VMs to fully start
+terraform destroy -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
+
+# Solution 2: Remove extensions from state and delete resource group
+# This avoids extension deletion errors by removing them from Terraform state first
+terraform state list | Select-String "extension" | ForEach-Object { 
+    $ext = $_.ToString().Trim()
+    Write-Host "Removing $ext from state..."
+    terraform state rm $ext
+}
+
+# Then delete resource group directly (Azure will clean up everything automatically)
+az group delete --name rg-avd-dev --yes --no-wait
+
+# Solution 3: Remove specific extensions manually and retry
+terraform state rm azurerm_virtual_machine_extension.guest_attestation[0]
+terraform state rm azurerm_virtual_machine_extension.guest_attestation[1]
+terraform state rm azurerm_virtual_machine_extension.avd_dsc[0]
+terraform state rm azurerm_virtual_machine_extension.avd_dsc[1]
+terraform state rm azurerm_virtual_machine_extension.aadlogin[0]
+terraform state rm azurerm_virtual_machine_extension.aadlogin[1]
+
+# Then retry destroy
+terraform destroy -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
+```
+
+**Note**: Azure requires VMs to be running to modify or delete extensions. If VMs are stopped by scaling plans, auto-shutdown policies, or manual intervention, start them before running `terraform destroy`. Extensions will be automatically cleaned up when the resource group is deleted, so Solution 2 is often the fastest approach.
+
 ## Cleanup
 
 ### Remove Specific Deployment
+
+**Important**: If VMs are stopped (due to scaling plans or auto-shutdown), extension deletion errors may occur. See [VM Extension Deletion Errors](#vm-extension-deletion-errors-vm-stopped) section for solutions.
+
 ```powershell
 # Remove development pooled desktop
 terraform workspace select dev-pooled-desktop
