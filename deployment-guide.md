@@ -49,7 +49,7 @@ All resources follow [**Microsoft Cloud Adoption Framework**](https://learn.micr
 |-------------|----------------|------|----------|----------|
 | **Development** | Pooled Desktop + Monitoring | `dev-pooled-desktop-with-monitoring.auto.tfvars` | Monitoring, Scaling, Dashboards | Development with cost optimization |
 | **Production** | Pooled RemoteApp + Monitoring | `prod-pooled-remoteapp-with-monitoring.auto.tfvars` | Monitoring, Scaling, Dashboards | Production apps with insights |
-| **Development** | Pooled Desktop + Enhanced Scaling | `dev-pooled-desktop-enhanced-scaling.auto.tfvars` | **NEW**: Custom roles, Advanced schedules, User notifications | Advanced development with enhanced scaling control |
+| **Development** | Pooled Desktop + Enhanced Scaling | `dev-pooled-desktop-enhanced-scaling.auto.tfvars` | **NEW**: Built-in role with subscription scope, Advanced schedules, User notifications | Advanced development with enhanced scaling control |
 
 ## Authentication Setup
 
@@ -134,7 +134,8 @@ Write-Host "`nReady for Terraform deployment!" -ForegroundColor Green
 - **`ramp_down_wait_time_minutes`** - Configurable wait time before session termination
 - **`ramp_down_force_logoff_users`** - Control whether to force logoff users
 - **`ramp_down_stop_hosts_when`** - Choose when to stop hosts ("ZeroSessions", "ZeroActiveSessions")
-- **Custom Role Definition** - Automatically creates precise permissions for scaling operations
+- **Built-in Role Assignment** - Uses "Desktop Virtualization Power On Off Contributor" role at subscription scope for better permissions
+- **Separate Host Pool Association** - Uses dedicated resource for better Azure Portal compatibility
 
 ### 3. Optional Customizations
 
@@ -392,15 +393,21 @@ The AVD Terraform configuration now includes comprehensive monitoring, scaling, 
 
 ### Scaling Plan Behavior
 
-#### Development Environment
-- **Weekdays**: 7:00 AM - 9:00 PM (100% capacity during peak)
-- **Weekends**: 9:00 AM - 6:00 PM (20% capacity, scale to 0% off-hours)
+#### Development Environment (Default)
+- **Weekdays**: Ramp-up 08:00, Peak 09:00-17:00, Ramp-down 17:00, Off-peak 18:00+
+  - Minimum hosts: 20% during ramp-up/peak, 20% during ramp-down
+- **Weekends**: Ramp-up 09:00, Peak 10:00-16:00, Ramp-down 16:00, Off-peak 17:00+
+  - Minimum hosts: 10% during ramp-up/peak, 10% during ramp-down
 - **Aggressive scaling** for maximum cost savings
 
-#### Production Environment
-- **Weekdays**: 6:00 AM - 10:00 PM (100% capacity during peak)
-- **Weekends**: 8:00 AM - 8:00 PM (40% capacity, 20% off-hours)
+#### Production Environment (Default)
+- **Weekdays**: Ramp-up 07:00, Peak 08:00-18:00, Ramp-down 18:00, Off-peak 19:00+
+  - Minimum hosts: 30% during ramp-up/peak, 30% during ramp-down
+- **Weekends**: Ramp-up 08:00, Peak 09:00-17:00, Ramp-down 17:00, Off-peak 18:00+
+  - Minimum hosts: 20% during ramp-up/peak, 20% during ramp-down
 - **Conservative scaling** for reliability
+
+**Note**: Schedules are fully customizable via `scaling_plan_schedules` variable. Enhanced scaling deployments (e.g., `dev-pooled-desktop-enhanced-scaling.auto.tfvars`) may have different schedules optimized for specific use cases.
 
 ### Monitoring Capabilities
 
@@ -481,6 +488,8 @@ dashboard_refresh_interval = 15
 - **Disable for personal deployments** (dedicated VMs)
 - **Monitor scaling effectiveness** using dashboard metrics
 - **Adjust schedules** based on actual usage patterns
+- **Architecture**: Uses built-in role with subscription-level scope for broader permissions
+- **Portal compatibility**: Separate host pool association resource resolves Azure Portal 404 errors
 
 #### Monitoring Configuration
 - **Use 30-day retention** for development environments

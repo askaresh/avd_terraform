@@ -27,6 +27,9 @@ This configuration supports **four distinct AVD deployment patterns**:
 - **Environment-specific schedules** (dev vs prod)
 - **Cost savings** of 40-70% for pooled deployments
 - **Smart scaling** only for pooled deployments (desktop & RemoteApp)
+- **Enterprise-grade architecture**: Uses built-in "Desktop Virtualization Power On Off Contributor" role with subscription-level scope
+- **Azure Portal compatibility**: Separate host pool association resource ensures reliable portal integration
+- **Best practices**: Random UUID for role assignments, lifecycle management for stability
 
 ### 2. **Monitoring & Observability**
 - **Log Analytics workspace** with comprehensive logging
@@ -42,7 +45,8 @@ This configuration supports **four distinct AVD deployment patterns**:
 
 ### 4. **Cost Management**
 - **Daily cost alerts** with configurable thresholds
-- **Budget tracking** and notifications
+- **Budget tracking** with dynamic monthly start dates (auto-calculated from current month)
+- **Budget notifications** at 90% and 100% thresholds
 - **Cost optimization** recommendations
 - **Spending insights** and trends
 
@@ -221,19 +225,25 @@ The configuration automatically adjusts based on the `deployment_type` variable:
 |-------------|----------------|------|----------|----------|
 | **Development** | Pooled Desktop + Monitoring | `dev-pooled-desktop-with-monitoring.auto.tfvars` | Monitoring, Scaling, Dashboards | Development with cost optimization |
 | **Production** | Pooled RemoteApp + Monitoring | `prod-pooled-remoteapp-with-monitoring.auto.tfvars` | Monitoring, Scaling, Dashboards | Production apps with insights |
-| **Development** | Pooled Desktop + Enhanced Scaling | `dev-pooled-desktop-enhanced-scaling.auto.tfvars` | **NEW**: Custom roles, Advanced schedules, User notifications | Advanced development with enhanced scaling control |
+| **Development** | Pooled Desktop + Enhanced Scaling | `dev-pooled-desktop-enhanced-scaling.auto.tfvars` | **NEW**: Built-in role with subscription scope, Advanced schedules, User notifications | Advanced development with enhanced scaling control |
 
 ## Scaling Plan Behavior
 
-### Development Environment
-- **Weekdays**: 7:00 AM - 9:00 PM (100% capacity during peak)
-- **Weekends**: 9:00 AM - 6:00 PM (20% capacity, scale to 0% off-hours)
+### Development Environment (Default)
+- **Weekdays**: Ramp-up 08:00, Peak 09:00-17:00, Ramp-down 17:00, Off-peak 18:00+
+  - Minimum hosts: 20% during ramp-up/peak, 20% during ramp-down
+- **Weekends**: Ramp-up 09:00, Peak 10:00-16:00, Ramp-down 16:00, Off-peak 17:00+
+  - Minimum hosts: 10% during ramp-up/peak, 10% during ramp-down
 - **Aggressive scaling** for maximum cost savings
 
-### Production Environment
-- **Weekdays**: 6:00 AM - 10:00 PM (100% capacity during peak)
-- **Weekends**: 8:00 AM - 8:00 PM (40% capacity, 20% off-hours)
+### Production Environment (Default)
+- **Weekdays**: Ramp-up 07:00, Peak 08:00-18:00, Ramp-down 18:00, Off-peak 19:00+
+  - Minimum hosts: 30% during ramp-up/peak, 30% during ramp-down
+- **Weekends**: Ramp-up 08:00, Peak 09:00-17:00, Ramp-down 17:00, Off-peak 18:00+
+  - Minimum hosts: 20% during ramp-up/peak, 20% during ramp-down
 - **Conservative scaling** for reliability
+
+**Note**: Schedules are fully customizable via `scaling_plan_schedules` variable. Enhanced scaling deployments may have different schedules.
 
 ## Monitoring Capabilities
 
@@ -581,6 +591,10 @@ terraform output quick_links
 terraform output log_analytics_workspace_name
 terraform output scaling_plan_name
 terraform output dashboard_name
+
+# Check scaling plan configuration details
+terraform output scaling_plan_host_pool_association_id
+terraform output scaling_plan_role_assignment_id
 ```
 
 ### Other Key Outputs
@@ -593,13 +607,15 @@ terraform output dashboard_name
 | `deployment_config` | Complete configuration details for the deployment | Configuration object with all settings |
 | `published_applications` | List of published apps (RemoteApp only) | Array of application details |
 | `session_host_names` | Names of deployed session host VMs | `["vm-avd-dev-01", "vm-avd-dev-02"]` |
+| `scaling_plan_host_pool_association_id` | ID of the scaling plan-host pool association | Resource ID string |
+| `scaling_plan_role_assignment_id` | ID of the scaling plan role assignment | Resource ID string |
 
 ## Support and Documentation
 
 For detailed deployment instructions, troubleshooting, and advanced configuration options, see:
 
 - **[deployment-guide.md](deployment-guide.md)** - Comprehensive deployment guide with examples
-- **[FEATURE_SUMMARY.md](FEATURE_SUMMARY.md)** - Detailed feature documentation (being consolidated into README)
+- **[DEPENDENCY_FLOW.md](DEPENDENCY_FLOW.md)** - Detailed dependency flow and resource creation order
 
 ## Contributing
 

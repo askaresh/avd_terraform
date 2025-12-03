@@ -34,16 +34,20 @@
    └── Log Analytics Workspace (azurerm_log_analytics_workspace.avd_monitoring)
    ↓
 6. Scaling Plan Prerequisites
-   ├── Role Definition (data.azurerm_role_definition.avd_power_role)
-   ├── Service Principal (data.azuread_service_principal.avd)
-   └── Role Assignment (azurerm_role_assignment.scaling_plan)
+   ├── Subscription Data (data.azurerm_subscription.current)
+   ├── Random UUID (random_uuid.scaling_plan_role)
+   ├── Role Definition (data.azurerm_role_definition.avd_power_role) - Built-in role
+   ├── Service Principal (data.azuread_service_principal.avd) - Hardcoded client ID
+   └── Role Assignment (azurerm_role_assignment.scaling_plan) - Subscription scope
 ```
 
 ### **Phase 4: Scaling Plan & Advanced Features**
 ```
 7. Scaling Plan (azurerm_virtual_desktop_scaling_plan.avd)
    ↓
-8. Monitoring & Cost Management
+8. Host Pool Association (azurerm_virtual_desktop_scaling_plan_host_pool_association.avd)
+   ↓
+9. Monitoring & Cost Management
    ├── Diagnostic Settings
    │   ├── Host Pool Diagnostics
    │   └── Session Host Diagnostics
@@ -61,16 +65,25 @@
 resource "azurerm_virtual_desktop_scaling_plan" "avd" {
   # ... configuration ...
   
-  # Inline host pool association
-  host_pool {
-    hostpool_id = azurerm_virtual_desktop_host_pool.avd.id  # ← Implicit dependency
-    scaling_plan_enabled = true
-  }
+  # Host pool association handled separately (see below)
+  # This ensures better Azure Portal compatibility
   
   depends_on = [
     azurerm_role_assignment.scaling_plan,                    # ← Role must be assigned first
     azurerm_virtual_desktop_host_pool.avd,                   # ← Host pool must exist
     azurerm_windows_virtual_machine.session_host             # ← Session hosts must be ready
+  ]
+}
+
+# Separate host pool association resource (best practice)
+resource "azurerm_virtual_desktop_scaling_plan_host_pool_association" "avd" {
+  host_pool_id    = azurerm_virtual_desktop_host_pool.avd.id  # ← Implicit dependency
+  scaling_plan_id = azurerm_virtual_desktop_scaling_plan.avd[0].id
+  enabled         = true
+  
+  depends_on = [
+    azurerm_virtual_desktop_scaling_plan.avd,
+    azurerm_role_assignment.scaling_plan
   ]
 }
 ```
@@ -93,10 +106,12 @@ resource "azurerm_portal_dashboard" "avd_insights" {
 
 ### **How Scaling Plan Gets All Required Information:**
 
-1. **Host Pool ID**: Automatically retrieved from `azurerm_virtual_desktop_host_pool.avd.id`
+1. **Host Pool ID**: Automatically retrieved from `azurerm_virtual_desktop_host_pool.avd.id` and associated via separate `azurerm_virtual_desktop_scaling_plan_host_pool_association` resource
 2. **Session Host Count**: Uses `var.session_host_count` for scaling calculations
 3. **Resource Group**: References `azurerm_resource_group.avd.name` and `.location`
-4. **Scaling Schedules**: Uses `local.scaling_schedules` which are dynamically generated based on:
+4. **Role Assignment**: Uses subscription-level scope with built-in "Desktop Virtualization Power On Off Contributor" role
+5. **Service Principal**: Uses hardcoded AVD service principal client ID (`9cdead84-a844-4324-93f2-b2e6bb768d07`) for reliability
+6. **Scaling Schedules**: Uses `local.scaling_schedules` which are dynamically generated based on:
    - `var.environment` (dev/prod)
    - `var.scaling_plan_schedules` (custom schedules if provided)
    - Default schedules if no custom ones specified
@@ -113,8 +128,11 @@ resource "azurerm_portal_dashboard" "avd_insights" {
 ### **Scaling Plan Validation**
 - ✅ Host pool exists and is properly configured
 - ✅ Session hosts are deployed and registered
-- ✅ Role assignment is in place
+- ✅ Role assignment is in place (subscription-level scope)
+- ✅ Built-in role "Desktop Virtualization Power On Off Contributor" is assigned
+- ✅ Host pool association resource exists
 - ✅ Scaling schedules are properly formatted
+- ✅ Random UUID generated for role assignment name
 
 ### **Monitoring Validation**
 - ✅ Log Analytics workspace is created
@@ -155,8 +173,9 @@ resource "azurerm_portal_dashboard" "avd_insights" {
 Time 0-2min:   Foundation (RG, Network, AVD Core)
 Time 2-8min:   Session Hosts & Extensions
 Time 8-9min:   Monitoring Infrastructure
-Time 9-10min:  Scaling Plan & Role Assignment
-Time 10-11min: Advanced Monitoring & Dashboard
+Time 9-10min:  Scaling Plan Prerequisites (Subscription, UUID, Role, Service Principal)
+Time 10-11min: Scaling Plan Creation & Host Pool Association
+Time 11-12min: Advanced Monitoring & Dashboard
 ```
 
 This ensures that the scaling plan has all the information it needs about the deployed infrastructure and can properly manage the session hosts. 
