@@ -422,6 +422,9 @@ resource "azurerm_virtual_machine_extension" "guest_attestation" {
     }
   })
   depends_on = [azurerm_windows_virtual_machine.session_host]
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 /*
@@ -461,6 +464,9 @@ PROTECTED_SETTINGS
   depends_on = [
     azurerm_virtual_desktop_host_pool_registration_info.avd
   ]
+  lifecycle {
+    create_before_destroy = false
+  }
 }
 
 /*
@@ -482,6 +488,32 @@ resource "azurerm_virtual_machine_extension" "aadlogin" {
   settings = jsonencode({
     mdmId = ""
   })
+
+  lifecycle {
+    create_before_destroy = false
+  }
+}
+
+/*
+ * Session Host Cleanup on Destroy (AzAPI)
+ *
+ * Removes session host registrations from the host pool when VMs are destroyed.
+ * This prevents "SessionHostPool could not be deleted because it still has 
+ * SessionHosts associated" errors during terraform destroy.
+ */
+resource "azapi_resource_action" "remove_session_host" {
+  count = var.session_host_count
+
+  type        = "Microsoft.DesktopVirtualization/hostPools/sessionHosts@2024-04-03"
+  resource_id = "${azurerm_virtual_desktop_host_pool.avd.id}/sessionHosts/${azurerm_windows_virtual_machine.session_host[count.index].computer_name}"
+  method      = "DELETE"
+  
+  when = "destroy"
+  
+  depends_on = [
+    azurerm_virtual_machine_extension.avd_dsc,
+    azurerm_virtual_machine_extension.aadlogin
+  ]
 }
 
 # =============================================================================

@@ -13,6 +13,10 @@ terraform {
       source  = "hashicorp/random"
       version = ">= 3.5.1, < 4.0.0"
     }
+    azapi = {
+      source  = "azure/azapi"
+      version = "~> 2.0"
+    }
   }
 }
 
@@ -28,4 +32,10 @@ provider "azurerm" {
 provider "azuread" {
   # Azure AD provider configuration
   # Uses the same authentication as the AzureRM provider
+}
+
+provider "azapi" {
+  # AzAPI provider configuration
+  # Uses the same authentication as the AzureRM provider
+  # Required for session host cleanup during destroy operations
 }
