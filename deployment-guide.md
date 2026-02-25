@@ -53,53 +53,92 @@ All resources follow [**Microsoft Cloud Adoption Framework**](https://learn.micr
 
 ## Authentication Setup
 
-For consistent authentication across deployments, you can create a `set-auth.ps1` script to handle Azure login and context switching:
+Authentication uses a **Service Principal with a `.env` credentials file**. The `set-auth.ps1` script reads this file and injects the credentials as environment variables for the current PowerShell session, which Terraform automatically picks up via the standard `ARM_*` environment variables.
 
-```powershell
-# set-auth.ps1 - Sample Azure Authentication Script
-param(
-    [Parameter(Mandatory=$false)]
-    [string]$SubscriptionId,
-    
-    [Parameter(Mandatory=$false)]
-    [string]$Environment = "dev"
-)
-
-Write-Host "=== Azure AVD Authentication Setup ===" -ForegroundColor Green
-
-# Login to Azure (interactive if not already logged in)
-$context = az account show 2>$null | ConvertFrom-Json
-if (-not $context) {
-    Write-Host "Logging into Azure..." -ForegroundColor Yellow
-    az login
-}
-
-# Set subscription if provided
-if ($SubscriptionId) {
-    Write-Host "Setting subscription: $SubscriptionId" -ForegroundColor Cyan
-    az account set --subscription $SubscriptionId
-}
-
-# Display current context
-$currentContext = az account show | ConvertFrom-Json
-Write-Host "✓ Authenticated as: $($currentContext.user.name)" -ForegroundColor Green
-Write-Host "✓ Subscription: $($currentContext.name)" -ForegroundColor Green
-Write-Host "✓ Environment: $Environment" -ForegroundColor Green
-
-Write-Host "`nReady for Terraform deployment!" -ForegroundColor Green
+```
+set-auth.ps1   ← reads credentials → sets ARM_* env vars → Terraform uses them
+.env           ← contains credentials (NEVER commit to git)
+.env.example   ← template with placeholder values (safe to commit)
 ```
 
-**Usage Examples:**
+> **Security**: `.env` is excluded by `.gitignore`. The `set-auth.ps1` script contains no credentials and is tracked in git so all team members share the same workflow.
+
+### Step 1 — Create your `.env` file
+
+Copy `.env.example` to `.env` and fill in your Azure Service Principal values:
+
 ```powershell
-# Basic login and context check
+Copy-Item .env.example .env
+# Then edit .env with your real credentials
+```
+
+The `.env` file format:
+```ini
+ARM_CLIENT_ID=<your-service-principal-app-id>
+ARM_CLIENT_SECRET=<your-service-principal-secret>
+ARM_TENANT_ID=<your-azure-tenant-id>
+ARM_SUBSCRIPTION_ID=<your-azure-subscription-id>
+```
+
+### Step 2 — Create a Service Principal (first time only)
+
+If you do not already have a Service Principal, create one using Azure CLI:
+
+```powershell
+az ad sp create-for-rbac `
+  --name "sp-avd-terraform" `
+  --role "Contributor" `
+  --scopes "/subscriptions/<your-subscription-id>"
+```
+
+The output maps to your `.env` as follows:
+| CLI output field | `.env` variable       |
+|------------------|-----------------------|
+| `appId`          | `ARM_CLIENT_ID`       |
+| `password`       | `ARM_CLIENT_SECRET`   |
+| `tenant`         | `ARM_TENANT_ID`       |
+| *(your sub ID)*  | `ARM_SUBSCRIPTION_ID` |
+
+For scaling plans to work, the Service Principal also needs the **"Desktop Virtualization Power On Off Contributor"** built-in role at subscription scope:
+
+```powershell
+az role assignment create `
+  --assignee "<ARM_CLIENT_ID>" `
+  --role "Desktop Virtualization Power On Off Contributor" `
+  --scope "/subscriptions/<your-subscription-id>"
+```
+
+### Step 3 — Load credentials before every Terraform session
+
+Run this **once per PowerShell session** before any Terraform commands:
+
+```powershell
 .\set-auth.ps1
-
-# Login with specific subscription
-.\set-auth.ps1 -SubscriptionId "your-subscription-id"
-
-# Set environment context for deployment
-.\set-auth.ps1 -Environment "prod"
 ```
+
+Expected output:
+```
+Loading Azure authentication from .env file...
+  Set: ARM_CLIENT_ID
+  Set: ARM_CLIENT_SECRET
+  Set: ARM_TENANT_ID
+  Set: ARM_SUBSCRIPTION_ID
+
+Environment variables set successfully!
+Subscription: 7b051460-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+You can now run: terraform init, terraform plan, terraform apply
+```
+
+> **Note**: Environment variables are session-scoped. If you open a new PowerShell window you must run `.\set-auth.ps1` again before using Terraform.
+
+### Moving to a New Machine
+
+1. Clone the repository (includes `set-auth.ps1` and `.env.example`)
+2. Create your `.env` from `.env.example` and populate with credentials
+3. Run `.\set-auth.ps1` and proceed with normal Terraform commands
+
+No credentials are stored in any committed file.
 
 ## Before You Deploy
 

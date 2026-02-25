@@ -279,12 +279,14 @@ guidance.
 
 ## Prerequisites
 
-* [Terraform 1.2 or later](https://www.terraform.io/downloads.html) and the required providers:
-  * [`azurerm` provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest)
-  * [`azuread` provider](https://registry.terraform.io/providers/hashicorp/azuread/latest)
-  * [`random` provider](https://registry.terraform.io/providers/hashicorp/random/latest)
-  * [`azapi` provider](https://registry.terraform.io/providers/azure/azapi/latest) - Required for session host cleanup operations
+* [Terraform 1.2 or later](https://www.terraform.io/downloads.html) and the required providers (all managed by `providers.tf`):
+  * [`azurerm`](https://registry.terraform.io/providers/hashicorp/azurerm/latest) — Azure Resource Manager
+  * [`azuread`](https://registry.terraform.io/providers/hashicorp/azuread/latest) — Azure Active Directory
+  * [`random`](https://registry.terraform.io/providers/hashicorp/random/latest) — UUID generation for role assignments
+  * [`azapi`](https://registry.terraform.io/providers/azure/azapi/latest) — Session host cleanup during destroy
 * An Azure subscription with the [Virtual Desktop](https://learn.microsoft.com/en-us/azure/virtual-desktop/) service enabled.
+* An **Azure Service Principal** with Contributor access to the target subscription.
+* A **`.env` credentials file** (copied from `.env.example`) with the Service Principal credentials — see the [Authentication Setup](deployment-guide.md#authentication-setup) section for full instructions.
 * Object IDs for users, groups or service principals that require access to the
   published desktops. These IDs are supplied via the `security_principal_object_ids`
   variable.
@@ -294,49 +296,59 @@ guidance.
 ### Quick Start
 
 1. **Clone** the repository and navigate to the project directory
-2. **Set up Azure authentication** - See [deployment-guide.md](deployment-guide.md#authentication-setup) for detailed authentication setup
-3. **Choose your deployment type** by selecting the appropriate `.tfvars` file or creating a custom one
-4. **Deploy** using Terraform
+2. **Create your credentials file**
+   ```powershell
+   Copy-Item .env.example .env
+   # Edit .env and fill in your ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_TENANT_ID, ARM_SUBSCRIPTION_ID
+   ```
+3. **Load credentials** into your PowerShell session (repeat each time you open a new terminal)
+   ```powershell
+   .\set-auth.ps1
+   ```
+4. **Choose your deployment type** by selecting the appropriate `.tfvars` file or creating a custom one
+5. **Deploy** using Terraform
+
+> For detailed authentication setup, Service Principal creation steps, and multi-machine guidance see [deployment-guide.md — Authentication Setup](deployment-guide.md#authentication-setup).
 
 ### Deployment Type Examples
 
 The repository includes pre-configured examples for each deployment pattern:
 
 #### Pooled Desktop (Traditional AVD)
-```bash
-# Deploy shared desktop environment for multiple users
+```powershell
+.\set-auth.ps1
 terraform init
 terraform plan -var-file=dev-pooled-desktop.auto.tfvars
 terraform apply -var-file=dev-pooled-desktop.auto.tfvars
 ```
 
 #### Personal Desktop (Dedicated VMs)
-```bash
-# Deploy dedicated desktop per user
+```powershell
+.\set-auth.ps1
 terraform init
 terraform plan -var-file=dev-personal-desktop.auto.tfvars
 terraform apply -var-file=dev-personal-desktop.auto.tfvars
 ```
 
 #### RemoteApp (Published Applications)
-```bash
-# Deploy published applications environment
+```powershell
+.\set-auth.ps1
 terraform init
 terraform plan -var-file=dev-pooled-remoteapp.auto.tfvars
 terraform apply -var-file=dev-pooled-remoteapp.auto.tfvars
 ```
 
 #### Production RemoteApp (Dedicated App Access)
-```bash
-# Deploy dedicated application access for executives/compliance
+```powershell
+.\set-auth.ps1
 terraform init
 terraform plan -var-file=prod-personal-remoteapp.auto.tfvars
 terraform apply -var-file=prod-personal-remoteapp.auto.tfvars
 ```
 
 #### Development with Monitoring & Scaling
-```bash
-# Deploy with comprehensive monitoring and cost optimization
+```powershell
+.\set-auth.ps1
 terraform init
 terraform plan -var-file=dev-pooled-desktop-with-monitoring.auto.tfvars
 terraform apply -var-file=dev-pooled-desktop-with-monitoring.auto.tfvars

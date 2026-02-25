@@ -9,10 +9,14 @@
 .terraform/
 .terraform.lock.hcl
 
-# Authentication scripts with credentials  
-set-auth.ps1
+# Authentication helper scripts (no credentials - safe to commit)
+# set-auth.ps1 is intentionally tracked in git
 auth.ps1
+
+# Environment files containing credentials - NEVER commit these
+.env
 *.env
+!.env.example
 
 # Allow deployment guide
 !deployment-guide.md

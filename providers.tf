@@ -21,7 +21,8 @@ terraform {
 }
 
 provider "azurerm" {
-  subscription_id = "7b051460-2177-4fee-9e29-752f78e6ecb1"
+  # subscription_id is supplied via the ARM_SUBSCRIPTION_ID environment variable
+  # set by running .\set-auth.ps1 before any terraform commands
   features {
     resource_group {
       prevent_deletion_if_contains_resources = false
