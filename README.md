@@ -72,125 +72,146 @@ graph TB
     subgraph "Azure Subscription"
         subgraph "Resource Group"
             subgraph "Azure Virtual Desktop Service"
-                WS["Workspace<br/>vdws-avd-{env}"]
-                AG["Application Group<br/>vdag-avd-{env}-{suffix}<br/>(Dynamic Type)"]
-                HP["Host Pool<br/>vdpool-avd-{env}-{suffix}<br/>(Dynamic Config)"]
+                WS["Workspace<br/>vdws-{prefix}-{env}"]
+                WSAG["Workspace↔AppGroup<br/>Association"]
+                AG["Application Group<br/>vdag-{prefix}-{env}-{suffix}<br/>(Dynamic Type)"]
+                HP["Host Pool<br/>vdpool-{prefix}-{env}-{suffix}<br/>(Dynamic Config)"]
+                REG["Registration Info<br/>(Token for DSC join)"]
             end
-            
+
             subgraph "Networking"
-                VNET["Virtual Network<br/>vnet-avd-{env}<br/>(192.168.0.0/24)"]
-                SUBNET["Subnet<br/>snet-avd-{env}<br/>(192.168.0.0/24)"]
-                NSG["Network Security Group<br/>nsg-avd-{env}"]
+                VNET["Virtual Network<br/>vnet-{prefix}-{env}"]
+                SUBNET["Subnet<br/>snet-{prefix}-{env}"]
+                NSG["Network Security Group<br/>nsg-{prefix}-{env}"]
+                NSGA["NSG↔Subnet Association"]
             end
-            
+
             subgraph "Session Hosts"
-                VM1["Session Host VM 1<br/>vm-avd-{env}-01<br/>(Windows 11 + M365)"]
-                VM2["Session Host VM 2<br/>vm-avd-{env}-02<br/>(Optional)"]
-                VM3["Session Host VM N<br/>vm-avd-{env}-0N<br/>(Scalable)"]
-                
-                NIC1["NIC 1<br/>nic-avd-{env}-01"]
-                NIC2["NIC 2<br/>nic-avd-{env}-02"]
-                NIC3["NIC N<br/>nic-avd-{env}-0N"]
-                
-                EXT1["VM Extensions:<br/>- AVD Agent (DSC Registration)<br/>- AAD Login<br/>- Guest Attestation"]
-                EXT2["VM Extensions:<br/>- AVD Agent (DSC Registration)<br/>- AAD Login<br/>- Guest Attestation"]
-                EXT3["VM Extensions:<br/>- AVD Agent (DSC Registration)<br/>- AAD Login<br/>- Guest Attestation"]
+                VM1["Session Host VM 1<br/>vm-{prefix}-{env}-01<br/>(Windows 11 + M365)"]
+                VM2["Session Host VM 2<br/>vm-{prefix}-{env}-02<br/>(Optional)"]
+                VM3["Session Host VM N<br/>vm-{prefix}-{env}-0N<br/>(Scalable)"]
+
+                NIC1["NIC 1<br/>nic-{prefix}-{env}-01"]
+                NIC2["NIC 2<br/>nic-{prefix}-{env}-02"]
+                NIC3["NIC N<br/>nic-{prefix}-{env}-0N"]
+
+                EXT1["VM Extensions:<br/>- DSC (AVD Agent Registration)<br/>- AADLoginForWindows<br/>- GuestAttestation"]
+                EXT2["VM Extensions:<br/>- DSC (AVD Agent Registration)<br/>- AADLoginForWindows<br/>- GuestAttestation"]
+                EXT3["VM Extensions:<br/>- DSC (AVD Agent Registration)<br/>- AADLoginForWindows<br/>- GuestAttestation"]
             end
-            
-            subgraph "Monitoring & Scaling"
-                LAW["Log Analytics<br/>law-avd-{env}"]
-                SP["Scaling Plan<br/>scaling-avd-{env}"]
-                DASH["Dashboard<br/>dashboard-avd-{env}"]
-                BUDGET["Cost Budget<br/>budget-avd-{env}"]
+
+            subgraph "Monitoring & Cost (Optional)"
+                LAW["Log Analytics<br/>law-{prefix}-{env}"]
+                DIAGHP["Diagnostic Setting<br/>(Host Pool → LAW)"]
+                DIAGVM["Diagnostic Setting<br/>(Session Hosts → LAW)"]
+                DASH["Dashboard<br/>dashboard-{prefix}-{env}"]
+                ACGROUP["Action Group<br/>ag-cost-{prefix}-{env}"]
+                BUDGET["Cost Budget<br/>budget-{prefix}-{env}"]
+                AUTOSHUTDOWN["Auto-Shutdown Schedule<br/>(18:00 daily per VM)"]
+            end
+
+            subgraph "Scaling (Pooled Only)"
+                SP["Scaling Plan<br/>scaling-{prefix}-{env}"]
+                ASSOC["Scaling Plan ↔<br/>Host Pool Association"]
+                SPROLE["Role Assignment<br/>Desktop Virtualization<br/>Power On Off Contributor"]
             end
         end
-        
+
         subgraph "Azure Active Directory"
-            USERS["Users/Groups<br/>(security_principal_object_ids)"]
+            USERS["Users / Groups<br/>(security_principal_object_ids)"]
             ROLES["RBAC Roles:<br/>- Desktop Virtualization User<br/>- Virtual Machine User Login"]
         end
-        
+
         subgraph "AVD Client Access"
             WEBCLIENT["Web Client<br/>(rdweb.wvd.microsoft.com)"]
-            NATIVECLIENT["Native Clients<br/>(Windows/Mac/iOS/Android)"]
+            NATIVECLIENT["Native Clients<br/>(Windows / Mac / iOS / Android)"]
         end
     end
 
-    %% Relationships
-    WS -.-> AG
-    AG --> HP
-    HP --> VM1
-    HP --> VM2
-    HP --> VM3
-    
-    VM1 --> NIC1
-    VM2 --> NIC2
-    VM3 --> NIC3
-    
-    NIC1 --> SUBNET
-    NIC2 --> SUBNET
-    NIC3 --> SUBNET
-    
+    %% AVD Service relationships
+    WS --> WSAG --> AG --> HP
+    HP --> REG
+
+    %% Networking
     SUBNET --> VNET
-    SUBNET --> NSG
-    
+    NSGA --> SUBNET
+    NSGA --> NSG
+
+    %% Session Hosts
+    HP --> VM1 & VM2 & VM3
+    REG --> EXT1 & EXT2 & EXT3
+    VM1 --> NIC1 --> SUBNET
+    VM2 --> NIC2 --> SUBNET
+    VM3 --> NIC3 --> SUBNET
     VM1 --> EXT1
     VM2 --> EXT2
     VM3 --> EXT3
-    
-    HP --> LAW
-    VM1 --> LAW
-    VM2 --> LAW
-    VM3 --> LAW
-    
-    HP --> SP
-    SP --> DASH
+
+    %% Monitoring
+    HP --> DIAGHP --> LAW
+    VM1 & VM2 & VM3 --> DIAGVM --> LAW
     LAW --> DASH
-    BUDGET --> DASH
-    
+    HP --> DASH
+    VM1 & VM2 & VM3 --> AUTOSHUTDOWN
+    BUDGET --> ACGROUP
+
+    %% Scaling (pooled only, optional)
+    SPROLE --> SP
+    SP --> ASSOC --> HP
+
+    %% RBAC
     USERS --> ROLES
     ROLES -.-> AG
-    ROLES -.-> VM1
-    ROLES -.-> VM2
-    ROLES -.-> VM3
-    
-    USERS --> WEBCLIENT
-    USERS --> NATIVECLIENT
-    WEBCLIENT --> WS
-    NATIVECLIENT --> WS
-    
+    ROLES -.-> VM1 & VM2 & VM3
+
+    %% Client access
+    USERS --> WEBCLIENT & NATIVECLIENT
+    WEBCLIENT & NATIVECLIENT --> WS
+
     %% Styling
-    classDef avdService fill:#e1f5fe
-    classDef networking fill:#f3e5f5
-    classDef compute fill:#e8f5e8
-    classDef security fill:#fff3e0
-    classDef client fill:#fce4ec
-    classDef monitoring fill:#fff8e1
-    
-    class WS,AG,HP avdService
-    class VNET,SUBNET,NSG networking
+    classDef avdService fill:#e1f5fe,stroke:#0288d1
+    classDef networking fill:#f3e5f5,stroke:#7b1fa2
+    classDef compute fill:#e8f5e8,stroke:#388e3c
+    classDef security fill:#fff3e0,stroke:#f57c00
+    classDef client fill:#fce4ec,stroke:#c62828
+    classDef monitoring fill:#fff8e1,stroke:#f9a825
+    classDef scaling fill:#e8eaf6,stroke:#3949ab
+    classDef assoc fill:#f5f5f5,stroke:#9e9e9e
+
+    class WS,AG,HP,REG,WSAG avdService
+    class VNET,SUBNET,NSG,NSGA networking
     class VM1,VM2,VM3,NIC1,NIC2,NIC3,EXT1,EXT2,EXT3 compute
     class USERS,ROLES security
     class WEBCLIENT,NATIVECLIENT client
-    class LAW,SP,DASH,BUDGET monitoring
+    class LAW,DIAGHP,DIAGVM,DASH,ACGROUP,BUDGET,AUTOSHUTDOWN monitoring
+    class SP,ASSOC,SPROLE scaling
 ```
 
 ### Key Components
 
-| Component | Purpose | Microsoft-Compliant Name Pattern |
-|-----------|---------|----------------------------------|
-| **Resource Group** | Container for all AVD resources | `rg-{prefix}-{environment}` |
-| **Virtual Network** | Isolated network for session hosts | `vnet-{prefix}-{environment}` ✅ |
-| **Subnet** | Session host network segment | `snet-{prefix}-{environment}` ✅ |
-| **Host Pool** | Manages session host capacity and load balancing | `vdpool-{prefix}-{environment}-{deployment-suffix}` ✅ |
-| **Application Group** | Defines published resources | `vdag-{prefix}-{environment}-{deployment-suffix}` ✅ |
-| **Workspace** | User-facing portal aggregating app groups | `vdws-{prefix}-{environment}` ✅ |
-| **Session Hosts** | Windows 11 VMs running user sessions | `vm-{prefix}-{environment}-{number}` ✅ |
-| **Published Applications** | Specific apps for RemoteApp deployments | **Conditional**: Only created for RemoteApp types |
-| **RBAC Assignments** | Security access control | Desktop Virtualization User + VM User Login roles |
-| **Log Analytics** | Monitoring and diagnostics | `law-{prefix}-{environment}` ✅ |
-| **Scaling Plan** | Automatic cost optimization | `scaling-{prefix}-{environment}` ✅ |
-| **Dashboard** | Operational insights | `dashboard-{prefix}-{environment}` ✅ |
+| Component | Purpose | Name Pattern | Conditional |
+|-----------|---------|--------------|-------------|
+| **Resource Group** | Container for all AVD resources | `rg-{prefix}-{environment}` | Always |
+| **Virtual Network** | Isolated network for session hosts | `vnet-{prefix}-{environment}` | Always |
+| **Subnet** | Session host network segment | `snet-{prefix}-{environment}` | Always |
+| **Network Security Group** | Subnet traffic control | `nsg-{prefix}-{environment}` | Always |
+| **Host Pool** | Manages session host capacity and load balancing | `vdpool-{prefix}-{environment}-{suffix}` | Always |
+| **Registration Info** | Short-lived token used by DSC to join session hosts | *(child of Host Pool)* | Always |
+| **Application Group** | Defines published desktops or RemoteApp applications | `vdag-{prefix}-{environment}-{suffix}` | Always |
+| **Workspace** | User-facing portal aggregating app groups | `vdws-{prefix}-{environment}` | Always |
+| **Published Applications** | Specific apps for RemoteApp deployments | *(child of App Group)* | RemoteApp types only |
+| **Session Host VMs** | Windows 11 VMs running user sessions | `vm-{prefix}-{environment}-{nn}` | Always |
+| **VM Extensions** | DSC Agent Registration, AAD Login, Guest Attestation | *(per VM)* | Always |
+| **RBAC Assignments** | Desktop Virtualization User + VM User Login roles | *(role assignments)* | Always |
+| **Log Analytics Workspace** | Centralised monitoring and diagnostics | `law-{prefix}-{environment}` | `enable_monitoring = true` |
+| **Diagnostic Settings** | Routes Host Pool and VM metrics to Log Analytics | *(per resource)* | `enable_monitoring = true` |
+| **Scaling Plan** | Automatic cost optimization for pooled deployments | `scaling-{prefix}-{environment}` | `enable_scaling_plans = true` + pooled types |
+| **Scaling Plan ↔ Host Pool Association** | Links scaling plan to host pool (separate resource for portal compatibility) | *(association resource)* | `enable_scaling_plans = true` + pooled types |
+| **Scaling Plan Role Assignment** | "Desktop Virtualization Power On Off Contributor" at subscription scope | *(UUID role assignment)* | `enable_scaling_plans = true` + pooled types |
+| **Action Group** | Email notification target for cost alerts | `ag-cost-{prefix}-{environment}` | `enable_cost_alerts = true` |
+| **Cost Budget** | Monthly spend tracking with 90%/100% alert thresholds | `budget-{prefix}-{environment}` | `enable_cost_alerts = true` |
+| **Auto-Shutdown Schedule** | Stops VMs at 18:00 daily to reduce off-hours costs | *(per VM)* | `enable_cost_alerts = true` |
+| **Dashboard** | Operational insights in Azure Portal | `dashboard-{prefix}-{environment}` | `enable_dashboards = true` |
 
 **✅ All names follow [Microsoft Cloud Adoption Framework](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations) standards**
 
@@ -223,9 +244,8 @@ The configuration automatically adjusts based on the `deployment_type` variable:
 
 | Environment | Deployment Type | File | Features | Use Case |
 |-------------|----------------|------|----------|----------|
-| **Development** | Pooled Desktop + Monitoring | `dev-pooled-desktop-with-monitoring.auto.tfvars` | Monitoring, Scaling, Dashboards | Development with cost optimization |
 | **Production** | Pooled RemoteApp + Monitoring | `prod-pooled-remoteapp-with-monitoring.auto.tfvars` | Monitoring, Scaling, Dashboards | Production apps with insights |
-| **Development** | Pooled Desktop + Enhanced Scaling | `dev-pooled-desktop-enhanced-scaling.auto.tfvars` | **NEW**: Built-in role with subscription scope, Advanced schedules, User notifications | Advanced development with enhanced scaling control |
+| **Development** | Pooled Desktop + Enhanced Scaling | `dev-pooled-desktop-enhanced-scaling.auto.tfvars` | Built-in role with subscription scope, Advanced schedules, User notifications, Auto-shutdown | Development with full cost optimization |
 
 ## Scaling Plan Behavior
 
@@ -266,11 +286,14 @@ The configuration is broken into logical files:
 
 | File              | Purpose |
 | ----------------- | ------- |
-| `providers.tf`    | Specifies the required provider versions and configures AzureRM, AzureAD, Random, and AzAPI providers. |
+| `providers.tf`    | Specifies the required provider versions and configures AzureRM, AzureAD, Random, and AzAPI providers. Subscription ID is read from the `ARM_SUBSCRIPTION_ID` environment variable. |
 | `variables.tf`    | Declares all variables that can be customised for an environment. Most defaults come from the supplied ARM template. |
-| `main.tf`         | Contains resource definitions for the resource group, network, host pool, application group, workspace, role assignments, NICs, virtual machines, VM extensions, monitoring, scaling, and dashboards. |
+| `main.tf`         | Contains resource definitions for the resource group, network, host pool, application group, workspace, role assignments, NICs, virtual machines, VM extensions, monitoring, scaling, auto-shutdown, and dashboards. |
 | `outputs.tf`      | Exposes key information about the deployment (resource group, host pool name, monitoring insights, etc.). |
 | `templates/dashboard.tpl` | Custom Azure dashboard template for operational insights. |
+| `set-auth.ps1`    | Authentication helper script — reads `.env` and sets `ARM_*` environment variables for the current PowerShell session. Run once before any Terraform commands. |
+| `.env.example`    | Template showing the required credential variables. Copy to `.env` and populate with real values. |
+| `.env`            | Your local credentials file (**never committed** — excluded by `.gitignore`). |
 
 To deploy this configuration you typically create a variable file such as
 `dev.auto.tfvars` or `prod.auto.tfvars` and override values defined in
@@ -346,12 +369,12 @@ terraform plan -var-file=prod-personal-remoteapp.auto.tfvars
 terraform apply -var-file=prod-personal-remoteapp.auto.tfvars
 ```
 
-#### Development with Monitoring & Scaling
+#### Development with Enhanced Scaling & Monitoring
 ```powershell
 .\set-auth.ps1
 terraform init
-terraform plan -var-file=dev-pooled-desktop-with-monitoring.auto.tfvars
-terraform apply -var-file=dev-pooled-desktop-with-monitoring.auto.tfvars
+terraform plan -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
+terraform apply -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
 ```
 
 ### Custom Configuration
@@ -541,8 +564,9 @@ This configuration has been tested with Terraform **1.6** and version **4.38.1**
 
 To remove all resources created by this configuration, run:
 
-```bash
-terraform destroy -var-file=dev.auto.tfvars
+```powershell
+.\set-auth.ps1
+terraform destroy -var-file=dev-pooled-desktop.auto.tfvars
 ```
 
 You will be prompted to confirm the destruction. Destroying the resources will remove the host pool, session hosts, network and resource group.
@@ -550,13 +574,14 @@ You will be prompted to confirm the destruction. Destroying the resources will r
 **Important**: If VMs are stopped (due to scaling plans or auto-shutdown), you may encounter extension deletion errors. To avoid this:
 
 1. **Start VMs before destroy** (recommended):
-   ```bash
+   ```powershell
+   .\set-auth.ps1
    az vm start --ids $(az vm list -g rg-avd-dev --query "[].id" -o tsv)
-   terraform destroy -var-file=dev.auto.tfvars
+   terraform destroy -var-file=dev-pooled-desktop.auto.tfvars
    ```
 
-2. **Or delete the resource group directly**:
-   ```bash
+2. **Or delete the resource group directly** (bypasses extension errors entirely):
+   ```powershell
    az group delete --name rg-avd-dev --yes --no-wait
    ```
    This automatically cleans up all resources including extensions.

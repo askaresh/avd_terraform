@@ -47,9 +47,8 @@ All resources follow [**Microsoft Cloud Adoption Framework**](https://learn.micr
 
 | Environment | Deployment Type | File | Features | Use Case |
 |-------------|----------------|------|----------|----------|
-| **Development** | Pooled Desktop + Monitoring | `dev-pooled-desktop-with-monitoring.auto.tfvars` | Monitoring, Scaling, Dashboards | Development with cost optimization |
 | **Production** | Pooled RemoteApp + Monitoring | `prod-pooled-remoteapp-with-monitoring.auto.tfvars` | Monitoring, Scaling, Dashboards | Production apps with insights |
-| **Development** | Pooled Desktop + Enhanced Scaling | `dev-pooled-desktop-enhanced-scaling.auto.tfvars` | **NEW**: Built-in role with subscription scope, Advanced schedules, User notifications | Advanced development with enhanced scaling control |
+| **Development** | Pooled Desktop + Enhanced Scaling | `dev-pooled-desktop-enhanced-scaling.auto.tfvars` | Built-in role with subscription scope, Advanced schedules, User notifications, Auto-shutdown | Development with full cost optimization |
 
 ## Authentication Setup
 
@@ -258,11 +257,11 @@ terraform apply -var-file=prod-personal-remoteapp.auto.tfvars
 # Set authentication (see Authentication Setup section above)
 .\set-auth.ps1
 
-# Initialize and deploy with monitoring
+# Initialize and deploy with enhanced scaling and monitoring
 terraform init
-terraform workspace new dev-pooled-desktop-monitoring
-terraform plan -var-file=dev-pooled-desktop-with-monitoring.auto.tfvars
-terraform apply -var-file=dev-pooled-desktop-with-monitoring.auto.tfvars
+terraform workspace new dev-pooled-desktop-enhanced
+terraform plan -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
+terraform apply -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
 ```
 
 ### 6. Production Pooled RemoteApp with Monitoring & Scaling
@@ -496,10 +495,10 @@ The AVD Terraform configuration now includes comprehensive monitoring, scaling, 
 ### Enabling Features
 
 #### For New Deployments
-Use the monitoring-enabled `.tfvars` files:
+Use the monitoring/scaling-enabled `.tfvars` files:
 ```powershell
-# Development with monitoring
-terraform apply -var-file=dev-pooled-desktop-with-monitoring.auto.tfvars
+# Development with enhanced scaling and monitoring
+terraform apply -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
 
 # Production with monitoring
 terraform apply -var-file=prod-pooled-remoteapp-with-monitoring.auto.tfvars
