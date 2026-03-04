@@ -63,7 +63,7 @@ variable "security_principal_object_ids" {
 variable "admin_username" {
   description = "Local administrator user name for the session host VMs."
   type        = string
-  default     = "localadmin"
+  default     = "azadmin"
 }
 
 variable "admin_password" {

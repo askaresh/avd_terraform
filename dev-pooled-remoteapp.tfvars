@@ -78,7 +78,7 @@ security_principal_object_ids = [
 ]
 
 # Local administrator credentials
-admin_username = "localadmin"
+admin_username = "azadmin"
 # REQUIRED: Set development password
 admin_password = "terraform@1234"  # Replace with actual password
 
