@@ -235,17 +235,17 @@ The configuration automatically adjusts based on the `deployment_type` variable:
 
 | Environment | Deployment Type | File | Use Case | Resulting Host Pool Name |
 |-------------|----------------|------|----------|--------------------------|
-| **Development** | Pooled Desktop | `dev-pooled-desktop.auto.tfvars` | Testing, training, call centers | `vdpool-avd-dev-desktop` |
-| **Development** | Personal Desktop | `dev-personal-desktop.auto.tfvars` | Developer workstations | `vdpool-avd-dev-personal` |
-| **Development** | Pooled RemoteApp | `dev-pooled-remoteapp.auto.tfvars` | App testing, legacy apps | `vdpool-avd-dev-apps` |
-| **Production** | Personal RemoteApp | `prod-personal-remoteapp.auto.tfvars` | Executive/compliance apps | `vdpool-avd-prod-personalapps` |
+| **Development** | Pooled Desktop | `dev-pooled-desktop.tfvars` | Testing, training, call centers | `vdpool-avd-dev-desktop` |
+| **Development** | Personal Desktop | `dev-personal-desktop.tfvars` | Developer workstations | `vdpool-avd-dev-personal` |
+| **Development** | Pooled RemoteApp | `dev-pooled-remoteapp.tfvars` | App testing, legacy apps | `vdpool-avd-dev-apps` |
+| **Production** | Personal RemoteApp | `prod-personal-remoteapp.tfvars` | Executive/compliance apps | `vdpool-avd-prod-personalapps` |
 
 ### Enhanced Deployment Options (with Monitoring & Scaling)
 
 | Environment | Deployment Type | File | Features | Use Case |
 |-------------|----------------|------|----------|----------|
-| **Production** | Pooled RemoteApp + Monitoring | `prod-pooled-remoteapp-with-monitoring.auto.tfvars` | Monitoring, Scaling, Dashboards | Production apps with insights |
-| **Development** | Pooled Desktop + Enhanced Scaling | `dev-pooled-desktop-enhanced-scaling.auto.tfvars` | Built-in role with subscription scope, Advanced schedules, User notifications, Auto-shutdown | Development with full cost optimization |
+| **Production** | Pooled RemoteApp + Monitoring | `prod-pooled-remoteapp-with-monitoring.tfvars` | Monitoring, Scaling, Dashboards | Production apps with insights |
+| **Development** | Pooled Desktop + Enhanced Scaling | `dev-pooled-desktop-enhanced-scaling.tfvars` | Built-in role with subscription scope, Advanced schedules, User notifications, Auto-shutdown | Development with full cost optimization |
 
 ## Scaling Plan Behavior
 
@@ -296,9 +296,9 @@ The configuration is broken into logical files:
 | `.env`            | Your local credentials file (**never committed** — excluded by `.gitignore`). |
 
 To deploy this configuration you typically create a variable file such as
-`dev.auto.tfvars` or `prod.auto.tfvars` and override values defined in
-`variables.tf`. See the **Using multiple environments** section below for
-guidance.
+`dev.tfvars` or `prod.tfvars` and pass it explicitly with `-var-file`. See the **Using multiple environments** section below for guidance.
+
+> **Important — do not use the `.auto.tfvars` extension.** Terraform automatically loads every `*.auto.tfvars` file in the directory simultaneously (alphabetically). Because this repository contains multiple environment configs, using `.auto.tfvars` causes all of them to merge — with the last file loaded winning on any conflicting variable (e.g. a prod file with `admin_password = ""` silently overriding a dev file's password). Always use plain `.tfvars` and pass the file explicitly with `-var-file`.
 
 ## Prerequisites
 
@@ -341,40 +341,40 @@ The repository includes pre-configured examples for each deployment pattern:
 ```powershell
 .\set-auth.ps1
 terraform init
-terraform plan -var-file=dev-pooled-desktop.auto.tfvars
-terraform apply -var-file=dev-pooled-desktop.auto.tfvars
+terraform plan -var-file=dev-pooled-desktop.tfvars
+terraform apply -var-file=dev-pooled-desktop.tfvars
 ```
 
 #### Personal Desktop (Dedicated VMs)
 ```powershell
 .\set-auth.ps1
 terraform init
-terraform plan -var-file=dev-personal-desktop.auto.tfvars
-terraform apply -var-file=dev-personal-desktop.auto.tfvars
+terraform plan -var-file=dev-personal-desktop.tfvars
+terraform apply -var-file=dev-personal-desktop.tfvars
 ```
 
 #### RemoteApp (Published Applications)
 ```powershell
 .\set-auth.ps1
 terraform init
-terraform plan -var-file=dev-pooled-remoteapp.auto.tfvars
-terraform apply -var-file=dev-pooled-remoteapp.auto.tfvars
+terraform plan -var-file=dev-pooled-remoteapp.tfvars
+terraform apply -var-file=dev-pooled-remoteapp.tfvars
 ```
 
 #### Production RemoteApp (Dedicated App Access)
 ```powershell
 .\set-auth.ps1
 terraform init
-terraform plan -var-file=prod-personal-remoteapp.auto.tfvars
-terraform apply -var-file=prod-personal-remoteapp.auto.tfvars
+terraform plan -var-file=prod-personal-remoteapp.tfvars
+terraform apply -var-file=prod-personal-remoteapp.tfvars
 ```
 
 #### Development with Enhanced Scaling & Monitoring
 ```powershell
 .\set-auth.ps1
 terraform init
-terraform plan -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
-terraform apply -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
+terraform plan -var-file=dev-pooled-desktop-enhanced-scaling.tfvars
+terraform apply -var-file=dev-pooled-desktop-enhanced-scaling.tfvars
 ```
 
 ### Custom Configuration
@@ -433,7 +433,7 @@ To deploy multiple environments:
 
 1. **Create one variable file per environment.** For example:
 
-   **`dev.auto.tfvars`**
+   **`dev.tfvars`**
    ```hcl
    environment                   = "dev"
    location                      = "australiaeast"
@@ -446,7 +446,7 @@ To deploy multiple environments:
    }
    ```
 
-   **`prod.auto.tfvars`**
+   **`prod.tfvars`**
    ```hcl
    environment                   = "prod"
    location                      = "australiaeast"
@@ -470,9 +470,9 @@ To deploy multiple environments:
    terraform workspace new dev
    terraform workspace new prod
    terraform workspace select dev
-   terraform apply -var-file=dev.auto.tfvars
+   terraform apply -var-file=dev.tfvars
    terraform workspace select prod
-   terraform apply -var-file=prod.auto.tfvars
+   terraform apply -var-file=prod.tfvars
    ```
 
 3. **Review and adjust** variable values such as VM sizes, number of hosts (`session_host_count`), network ranges and tags to suit each environment's requirements.
@@ -566,7 +566,7 @@ To remove all resources created by this configuration, run:
 
 ```powershell
 .\set-auth.ps1
-terraform destroy -var-file=dev-pooled-desktop.auto.tfvars
+terraform destroy -var-file=dev-pooled-desktop.tfvars
 ```
 
 You will be prompted to confirm the destruction. Destroying the resources will remove the host pool, session hosts, network and resource group.
@@ -576,8 +576,10 @@ You will be prompted to confirm the destruction. Destroying the resources will r
 1. **Start VMs before destroy** (recommended):
    ```powershell
    .\set-auth.ps1
-   az vm start --ids $(az vm list -g rg-avd-dev --query "[].id" -o tsv)
-   terraform destroy -var-file=dev-pooled-desktop.auto.tfvars
+   az vm start --resource-group rg-avd-dev --name vm-avd-dev-01 --no-wait
+   az vm start --resource-group rg-avd-dev --name vm-avd-dev-02 --no-wait
+   Start-Sleep -Seconds 60  # Wait for VMs to reach running state
+   terraform destroy -var-file=dev-pooled-desktop.tfvars
    ```
 
 2. **Or delete the resource group directly** (bypasses extension errors entirely):

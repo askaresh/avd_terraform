@@ -32,23 +32,27 @@ All resources follow [**Microsoft Cloud Adoption Framework**](https://learn.micr
 | **Virtual Machines** | `vm-{prefix}-{environment}-{number}` | `vm-avd-dev-01` |
 | **Network Interfaces** | `nic-{prefix}-{environment}-{number}` | `nic-avd-dev-01` |
 
+## Variable File Naming Convention
+
+> **Important — always use plain `.tfvars` files, not `.auto.tfvars`.** Terraform automatically loads every `*.auto.tfvars` file in the directory simultaneously (in alphabetical order). Because this repository contains multiple environment configs, using `.auto.tfvars` causes all of them to merge at once — with the last file alphabetically winning on any conflicting variable. For example, a prod file with `admin_password = ""` would silently override a dev file's real password. Always use plain `.tfvars` and pass the intended file explicitly with `-var-file="<file>.tfvars"`.
+
 ## Pre-configured Deployment Options
 
 ### Quick Deployment Matrix
 
 | Environment | Deployment Type | File | Use Case | Resulting Host Pool Name |
 |-------------|----------------|------|----------|--------------------------|
-| **Development** | Pooled Desktop | `dev-pooled-desktop.auto.tfvars` | Testing, training, call centers | `vdpool-avd-dev-desktop` |
-| **Development** | Personal Desktop | `dev-personal-desktop.auto.tfvars` | Developer workstations | `vdpool-avd-dev-personal` |
-| **Development** | Pooled RemoteApp | `dev-pooled-remoteapp.auto.tfvars` | App testing, legacy apps | `vdpool-avd-dev-apps` |
-| **Production** | Personal RemoteApp | `prod-personal-remoteapp.auto.tfvars` | Executive/compliance apps | `vdpool-avd-prod-personalapps` |
+| **Development** | Pooled Desktop | `dev-pooled-desktop.tfvars` | Testing, training, call centers | `vdpool-avd-dev-desktop` |
+| **Development** | Personal Desktop | `dev-personal-desktop.tfvars` | Developer workstations | `vdpool-avd-dev-personal` |
+| **Development** | Pooled RemoteApp | `dev-pooled-remoteapp.tfvars` | App testing, legacy apps | `vdpool-avd-dev-apps` |
+| **Production** | Personal RemoteApp | `prod-personal-remoteapp.tfvars` | Executive/compliance apps | `vdpool-avd-prod-personalapps` |
 
 ### Enhanced Deployment Options (with Monitoring & Scaling)
 
 | Environment | Deployment Type | File | Features | Use Case |
 |-------------|----------------|------|----------|----------|
-| **Production** | Pooled RemoteApp + Monitoring | `prod-pooled-remoteapp-with-monitoring.auto.tfvars` | Monitoring, Scaling, Dashboards | Production apps with insights |
-| **Development** | Pooled Desktop + Enhanced Scaling | `dev-pooled-desktop-enhanced-scaling.auto.tfvars` | Built-in role with subscription scope, Advanced schedules, User notifications, Auto-shutdown | Development with full cost optimization |
+| **Production** | Pooled RemoteApp + Monitoring | `prod-pooled-remoteapp-with-monitoring.tfvars` | Monitoring, Scaling, Dashboards | Production apps with insights |
+| **Development** | Pooled Desktop + Enhanced Scaling | `dev-pooled-desktop-enhanced-scaling.tfvars` | Built-in role with subscription scope, Advanced schedules, User notifications, Auto-shutdown | Development with full cost optimization |
 
 ## Authentication Setup
 
@@ -148,6 +152,8 @@ No credentials are stored in any committed file.
 - **`security_principal_object_ids`** - Azure AD object IDs for users/groups who need access
 - **`admin_password`** - Strong password for session host local admin (12+ chars, complexity required)
 
+> **Note**: All `prod-*.tfvars` files ship with `admin_password = ""` as a placeholder. The Azure provider rejects an empty password at apply time. You must set a real password before running `terraform apply` against any prod config. Dev files already contain a sample password (`terraform@1234`) which should also be replaced for real deployments.
+
 ### 2. Deployment-Specific Requirements
 
 #### For RemoteApp Deployments (`*remoteapp*` files):
@@ -212,8 +218,8 @@ Get-AzADGroup -DisplayName "AVD Users" | Select-Object Id
 # Initialize and deploy
 terraform init
 terraform workspace new dev-pooled-desktop
-terraform plan -var-file=dev-pooled-desktop.auto.tfvars
-terraform apply -var-file=dev-pooled-desktop.auto.tfvars
+terraform plan -var-file=dev-pooled-desktop.tfvars
+terraform apply -var-file=dev-pooled-desktop.tfvars
 ```
 
 ### 2. Personal Desktop (Dedicated VMs)
@@ -224,8 +230,8 @@ terraform apply -var-file=dev-pooled-desktop.auto.tfvars
 # Initialize and deploy
 terraform init
 terraform workspace new dev-personal-desktop
-terraform plan -var-file=dev-personal-desktop.auto.tfvars
-terraform apply -var-file=dev-personal-desktop.auto.tfvars
+terraform plan -var-file=dev-personal-desktop.tfvars
+terraform apply -var-file=dev-personal-desktop.tfvars
 ```
 
 ### 3. Pooled RemoteApp (Shared Applications)
@@ -236,8 +242,8 @@ terraform apply -var-file=dev-personal-desktop.auto.tfvars
 # Initialize and deploy
 terraform init
 terraform workspace new dev-pooled-remoteapp
-terraform plan -var-file=dev-pooled-remoteapp.auto.tfvars
-terraform apply -var-file=dev-pooled-remoteapp.auto.tfvars
+terraform plan -var-file=dev-pooled-remoteapp.tfvars
+terraform apply -var-file=dev-pooled-remoteapp.tfvars
 ```
 
 ### 4. Personal RemoteApp (Dedicated App Access)
@@ -248,8 +254,8 @@ terraform apply -var-file=dev-pooled-remoteapp.auto.tfvars
 # Initialize and deploy
 terraform init
 terraform workspace new prod-personal-remoteapp
-terraform plan -var-file=prod-personal-remoteapp.auto.tfvars
-terraform apply -var-file=prod-personal-remoteapp.auto.tfvars
+terraform plan -var-file=prod-personal-remoteapp.tfvars
+terraform apply -var-file=prod-personal-remoteapp.tfvars
 ```
 
 ### 5. Development Pooled Desktop with Monitoring & Scaling
@@ -260,8 +266,8 @@ terraform apply -var-file=prod-personal-remoteapp.auto.tfvars
 # Initialize and deploy with enhanced scaling and monitoring
 terraform init
 terraform workspace new dev-pooled-desktop-enhanced
-terraform plan -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
-terraform apply -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
+terraform plan -var-file=dev-pooled-desktop-enhanced-scaling.tfvars
+terraform apply -var-file=dev-pooled-desktop-enhanced-scaling.tfvars
 ```
 
 ### 6. Production Pooled RemoteApp with Monitoring & Scaling
@@ -272,8 +278,8 @@ terraform apply -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
 # Initialize and deploy with monitoring
 terraform init
 terraform workspace new prod-pooled-remoteapp-monitoring
-terraform plan -var-file=prod-pooled-remoteapp-with-monitoring.auto.tfvars
-terraform apply -var-file=prod-pooled-remoteapp-with-monitoring.auto.tfvars
+terraform plan -var-file=prod-pooled-remoteapp-with-monitoring.tfvars
+terraform apply -var-file=prod-pooled-remoteapp-with-monitoring.tfvars
 ```
 
 ## Resource Specifications by Deployment Type
@@ -398,15 +404,15 @@ You can deploy multiple deployment types in the same subscription:
 ```powershell
 # Deploy pooled desktop for general users
 terraform workspace select pooled-users
-terraform apply -var-file=prod-pooled-desktop.auto.tfvars
+terraform apply -var-file=prod-pooled-desktop.tfvars
 
 # Deploy personal desktops for developers  
 terraform workspace select personal-devs
-terraform apply -var-file=prod-personal-desktop.auto.tfvars
+terraform apply -var-file=prod-personal-desktop.tfvars
 
 # Deploy RemoteApp for specific applications
 terraform workspace select remoteapps
-terraform apply -var-file=prod-pooled-remoteapp.auto.tfvars
+terraform apply -var-file=prod-pooled-remoteapp.tfvars
 ```
 
 ## Monitoring and Scaling Features
@@ -445,7 +451,7 @@ The AVD Terraform configuration now includes comprehensive monitoring, scaling, 
   - Minimum hosts: 20% during ramp-up/peak, 20% during ramp-down
 - **Conservative scaling** for reliability
 
-**Note**: Schedules are fully customizable via `scaling_plan_schedules` variable. Enhanced scaling deployments (e.g., `dev-pooled-desktop-enhanced-scaling.auto.tfvars`) may have different schedules optimized for specific use cases.
+**Note**: Schedules are fully customizable via `scaling_plan_schedules` variable. Enhanced scaling deployments (e.g., `dev-pooled-desktop-enhanced-scaling.tfvars`) may have different schedules optimized for specific use cases.
 
 ### Monitoring Capabilities
 
@@ -498,10 +504,10 @@ The AVD Terraform configuration now includes comprehensive monitoring, scaling, 
 Use the monitoring/scaling-enabled `.tfvars` files:
 ```powershell
 # Development with enhanced scaling and monitoring
-terraform apply -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
+terraform apply -var-file=dev-pooled-desktop-enhanced-scaling.tfvars
 
 # Production with monitoring
-terraform apply -var-file=prod-pooled-remoteapp-with-monitoring.auto.tfvars
+terraform apply -var-file=prod-pooled-remoteapp-with-monitoring.tfvars
 ```
 
 #### For Existing Deployments
@@ -728,7 +734,7 @@ az group delete --name rg-avd-dev --yes --no-wait
 
 # Solution 2: Wait and retry (Azure backend may catch up)
 Start-Sleep 120  # Wait 2 minutes
-terraform destroy -var-file=dev-personal-desktop.auto.tfvars
+terraform destroy -var-file=dev-personal-desktop.tfvars
 
 # Solution 3: Force deletion with specific types
 az group delete --name rg-avd-dev --force-deletion-types Microsoft.Compute/virtualMachines,Microsoft.DesktopVirtualization/hostpools
@@ -746,9 +752,10 @@ If `terraform destroy` fails with extension deletion errors when VMs are stopped
 # "OperationNotAllowed: Cannot modify extensions in the VM when the VM is not running"
 
 # Solution 1: Start VMs before destroy (Recommended)
-az vm start --ids $(az vm list -g rg-avd-dev --query "[].id" -o tsv)
-Start-Sleep -Seconds 30  # Wait for VMs to fully start
-terraform destroy -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
+az vm start --resource-group rg-avd-dev --name vm-avd-dev-01 --no-wait
+az vm start --resource-group rg-avd-dev --name vm-avd-dev-02 --no-wait
+Start-Sleep -Seconds 60  # Wait for VMs to reach running state
+terraform destroy -var-file=dev-pooled-desktop-enhanced-scaling.tfvars
 
 # Solution 2: Remove extensions from state and delete resource group
 # This avoids extension deletion errors by removing them from Terraform state first
@@ -770,7 +777,7 @@ terraform state rm azurerm_virtual_machine_extension.aadlogin[0]
 terraform state rm azurerm_virtual_machine_extension.aadlogin[1]
 
 # Then retry destroy
-terraform destroy -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
+terraform destroy -var-file=dev-pooled-desktop-enhanced-scaling.tfvars
 ```
 
 **Note**: Azure requires VMs to be running to modify or delete extensions. If VMs are stopped by scaling plans, auto-shutdown policies, or manual intervention, start them before running `terraform destroy`. Extensions will be automatically cleaned up when the resource group is deleted, so Solution 2 is often the fastest approach.
@@ -784,11 +791,11 @@ terraform destroy -var-file=dev-pooled-desktop-enhanced-scaling.auto.tfvars
 ```powershell
 # Remove development pooled desktop
 terraform workspace select dev-pooled-desktop
-terraform destroy -var-file=dev-pooled-desktop.auto.tfvars
+terraform destroy -var-file=dev-pooled-desktop.tfvars
 
 # Remove production RemoteApp
 terraform workspace select prod-personal-remoteapp
-terraform destroy -var-file=prod-personal-remoteapp.auto.tfvars
+terraform destroy -var-file=prod-personal-remoteapp.tfvars
 ```
 
 ### Remove All Deployments
